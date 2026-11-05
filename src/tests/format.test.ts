@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { compoundFeetInchesToDecimal, formatQty, getProductStockBalance } from "./format";
+import {
+  compoundFeetInchesToDecimal,
+  formatQty,
+  getProductStockBalance,
+} from "@/app/lib/format";
 
 describe("formatQty (display-only rounding)", () => {
   it("trims trailing zeros", () => expect(formatQty("3.04800")).toBe("3.048"));
-  it("rounds only for display", () => expect(formatQty("22.672492052927723", 3)).toBe("22.672"));
+  it("rounds only for display", () =>
+    expect(formatQty("22.672492052927723", 3)).toBe("22.672"));
   it("rounds half up", () => expect(formatQty("1.0005", 3)).toBe("1.001"));
   it("handles numbers", () => expect(formatQty(120)).toBe("120"));
   it("returns a dash for empty values", () => {
@@ -11,7 +16,8 @@ describe("formatQty (display-only rounding)", () => {
     expect(formatQty(undefined)).toBe("—");
     expect(formatQty("")).toBe("—");
   });
-  it("returns a dash for invalid input", () => expect(formatQty("abc")).toBe("—"));
+  it("returns a dash for invalid input", () =>
+    expect(formatQty("abc")).toBe("—"));
 });
 
 describe("compoundFeetInchesToDecimal", () => {
@@ -39,11 +45,15 @@ describe("getProductStockBalance", () => {
   });
 
   it("handles 1:1 PostgREST object return ({ quantity: 50 })", () => {
-    expect(getProductStockBalance({ stock_balances: { quantity: 50 } })).toBe(50);
+    expect(getProductStockBalance({ stock_balances: { quantity: 50 } })).toBe(
+      50,
+    );
   });
 
   it("handles array return ([{ quantity: 75.5 }])", () => {
-    expect(getProductStockBalance({ stock_balances: [{ quantity: 75.5 }] })).toBe(75.5);
+    expect(
+      getProductStockBalance({ stock_balances: [{ quantity: 75.5 }] }),
+    ).toBe(75.5);
   });
 
   it("handles empty array or missing quantity", () => {
@@ -51,5 +61,4 @@ describe("getProductStockBalance", () => {
     expect(getProductStockBalance({ stock_balances: null })).toBe(0);
   });
 });
-
 

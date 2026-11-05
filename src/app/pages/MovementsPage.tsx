@@ -28,50 +28,15 @@ import {
 } from "@/app/lib/format";
 import { useAuth } from "@/app/lib/auth";
 import type { Database } from "@/types/database";
+import {
+  ProductSelector,
+  type ProductItem as ProductSummary,
+  getProductStockBalance,
+} from "@/app/components/ProductSelector";
 
 type MovementType = Database["public"]["Enums"]["movement_type"];
 type BillStatus = Database["public"]["Enums"]["bill_status"];
 type ProductTrackingMode = Database["public"]["Enums"]["tracking_mode"];
-
-type ProductSummary = {
-  id: string;
-  code: string;
-  name: string;
-  base_uom_id: string;
-  tracking_mode: ProductTrackingMode;
-  status: Database["public"]["Enums"]["product_status"];
-  base_uom: {
-    id: string;
-    code: string;
-    name: string;
-  } | null;
-  product_uoms?:
-    | {
-        uom_id: string;
-        requires_measurement: boolean;
-        uom: {
-          id: string;
-          code: string;
-          name: string;
-        } | null;
-      }[]
-    | null;
-  stock_balances?: { quantity: number }[] | { quantity: number } | null;
-};
-
-export function getProductStockBalance(
-  p: ProductSummary | null | undefined,
-): number {
-  if (!p || !p.stock_balances) return 0;
-  const sb = p.stock_balances as unknown;
-  if (Array.isArray(sb)) {
-    return sb.length > 0 ? Number(sb[0]?.quantity) || 0 : 0;
-  }
-  if (typeof sb === "object" && sb !== null && "quantity" in sb) {
-    return Number((sb as { quantity: unknown }).quantity) || 0;
-  }
-  return 0;
-}
 
 type Uom = Database["public"]["Tables"]["uoms"]["Row"];
 type ConversionRule = Database["public"]["Tables"]["conversion_rules"]["Row"];
@@ -189,10 +154,13 @@ export default function MovementsPage() {
           .from("products")
           .select(
             `
-            id, code, name, base_uom_id, tracking_mode, status,
+            *,
+            category:categories(id, name),
             base_uom:uoms!products_base_uom_id_fkey(id, code, name),
-            product_uoms(uom_id, requires_measurement, uom:uoms(id, code, name)),
-            stock_balances(quantity)
+            swg:swg_reference(gauge, diameter_mm),
+            perforation:product_perforation(product_id, hole_diameter_mm, pitch_mm),
+            stock_balances(quantity),
+            product_uoms(uom_id, requires_measurement, uom:uoms(id, code, name))
           `,
           )
           .eq("status", "active")
@@ -250,10 +218,13 @@ export default function MovementsPage() {
         .from("products")
         .select(
           `
-          id, code, name, base_uom_id, tracking_mode, status,
+          *,
+          category:categories(id, name),
           base_uom:uoms!products_base_uom_id_fkey(id, code, name),
-          product_uoms(uom_id, requires_measurement, uom:uoms(id, code, name)),
-          stock_balances(quantity)
+          swg:swg_reference(gauge, diameter_mm),
+          perforation:product_perforation(product_id, hole_diameter_mm, pitch_mm),
+          stock_balances(quantity),
+          product_uoms(uom_id, requires_measurement, uom:uoms(id, code, name))
         `,
         )
         .eq("status", "active")
@@ -1266,7 +1237,7 @@ function AddStockModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
-      <div className="relative w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl border max-h-[92vh] overflow-y-auto my-8">
+      <div className="relative w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl border my-8">
         <div className="flex items-center justify-between pb-3 border-b">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
@@ -1298,46 +1269,16 @@ function AddStockModal({
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           {/* Product selector */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">
-              Select Product <span className="text-destructive">*</span>
-            </Label>
-            <select
-              value={productId}
-              onChange={(e) => handleProductChange(e.target.value)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              required
-            >
-              <option value="">— Select an active product —</option>
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.code} - {p.name} (
-                  {p.tracking_mode === "roll" ? "Roll-tracked" : "Aggregate"} ·
-                  Base: {p.base_uom?.code})
-                </option>
-              ))}
-            </select>
-          </div>
+          <ProductSelector
+            products={products}
+            selectedProductId={productId}
+            onSelectProduct={(p) => handleProductChange(p ? p.id : "")}
+            disabled={saving}
+            required
+          />
 
           {selectedProduct && (
             <>
-              {/* Product Info Pill */}
-              <div className="rounded-lg bg-surface p-2.5 text-xs flex items-center justify-between border">
-                <div>
-                  <span className="text-muted-foreground">Base Unit:</span>{" "}
-                  <strong className="font-mono text-foreground">
-                    {selectedProduct.base_uom?.name} (
-                    {selectedProduct.base_uom?.code})
-                  </strong>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Current Stock:</span>{" "}
-                  <strong className="font-mono text-foreground">
-                    {formatQty(getProductStockBalance(selectedProduct))}{" "}
-                    {selectedProduct.base_uom?.code}
-                  </strong>
-                </div>
-              </div>
 
               {/* Roll Label (if tracking_mode is roll) */}
               {selectedProduct.tracking_mode === "roll" && (
@@ -1805,7 +1746,7 @@ function RemoveStockModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
-      <div className="relative w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl border max-h-[92vh] overflow-y-auto my-8">
+      <div className="relative w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl border my-8">
         <div className="flex items-center justify-between pb-3 border-b">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
@@ -1837,52 +1778,17 @@ function RemoveStockModal({
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           {/* Product selector */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">
-              Select Product <span className="text-destructive">*</span>
-            </Label>
-            <select
-              value={productId}
-              onChange={(e) => handleProductChange(e.target.value)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              required
-            >
-              <option value="">— Select an active product —</option>
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.code} - {p.name} (Stock:{" "}
-                  {formatQty(getProductStockBalance(p))}{" "}
-                  {p.base_uom?.code})
-                </option>
-              ))}
-            </select>
-          </div>
+          <ProductSelector
+            products={products}
+            selectedProductId={productId}
+            onSelectProduct={(p) => handleProductChange(p ? p.id : "")}
+            disabled={saving}
+            required
+            currentStockOverride={loadingBalance ? null : currentBalance}
+          />
 
           {selectedProduct && (
             <>
-              {/* Product Info Pill */}
-              <div className="rounded-lg bg-surface p-2.5 text-xs flex items-center justify-between border">
-                <div>
-                  <span className="text-muted-foreground">Base Unit:</span>{" "}
-                  <strong className="font-mono text-foreground">
-                    {selectedProduct.base_uom?.name} ({selectedProduct.base_uom?.code})
-                  </strong>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">
-                    Available Stock:
-                  </span>{" "}
-                  <strong className="font-mono text-foreground">
-                    {loadingBalance ? (
-                      <span className="text-muted-foreground animate-pulse">
-                        Fetching…
-                      </span>
-                    ) : (
-                      `${formatQty(currentBalance)} ${selectedProduct.base_uom?.code}`
-                    )}
-                  </strong>
-                </div>
-              </div>
 
               {/* Roll selector if roll tracked */}
               {selectedProduct.tracking_mode === "roll" && (
@@ -2192,8 +2098,8 @@ function OpeningStockModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-      <div className="relative w-full max-w-md rounded-xl bg-card p-6 shadow-2xl border">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
+      <div className="relative w-full max-w-md rounded-xl bg-card p-6 shadow-2xl border my-8">
         <div className="flex items-center justify-between pb-3 border-b">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-100 text-purple-700">
@@ -2230,22 +2136,14 @@ function OpeningStockModal({
             (NULL).
           </div>
 
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">Product *</Label>
-            <select
-              value={productId}
-              onChange={(e) => handleProductChange(e.target.value)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs"
-              required
-            >
-              <option value="">— Select a product —</option>
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.code} - {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Product selector */}
+          <ProductSelector
+            products={products}
+            selectedProductId={productId}
+            onSelectProduct={(p) => handleProductChange(p ? p.id : "")}
+            disabled={saving}
+            required
+          />
 
           {selectedProduct && (
             <>
@@ -2420,8 +2318,8 @@ function CorrectionModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-      <div className="relative w-full max-w-md rounded-xl bg-card p-6 shadow-2xl border">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
+      <div className="relative w-full max-w-md rounded-xl bg-card p-6 shadow-2xl border my-8">
         <div className="flex items-center justify-between pb-3 border-b">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
@@ -2457,33 +2355,18 @@ function CorrectionModal({
             in Base UOM and mandatory reason are permanently logged.
           </div>
 
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">Product *</Label>
-            <select
-              value={productId}
-              onChange={(e) => handleProductChange(e.target.value)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs"
-              required
-            >
-              <option value="">— Select a product —</option>
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.code} - {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Product selector */}
+          <ProductSelector
+            products={products}
+            selectedProductId={productId}
+            onSelectProduct={(p) => handleProductChange(p ? p.id : "")}
+            disabled={saving}
+            required
+            currentStockOverride={currentBalance}
+          />
 
           {selectedProduct && (
             <>
-              <div className="rounded-md bg-surface p-2 text-xs border flex justify-between font-mono">
-                <span className="text-muted-foreground">
-                  Current Stock Balance:
-                </span>
-                <span className="font-semibold text-foreground">
-                  {formatQty(currentBalance)} {selectedProduct.base_uom?.code}
-                </span>
-              </div>
               {selectedProduct.tracking_mode === "roll" && (
                 <div className="space-y-1.5">
                   <Label className="text-xs font-semibold">
@@ -2642,8 +2525,8 @@ function ReverseMovementModal({
   const isPositiveOriginal = movement.qty_delta > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-      <div className="relative w-full max-w-md rounded-xl bg-card p-6 shadow-2xl border">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
+      <div className="relative w-full max-w-md rounded-xl bg-card p-6 shadow-2xl border my-8">
         <div className="flex items-center justify-between pb-3 border-b">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-100 text-rose-700">

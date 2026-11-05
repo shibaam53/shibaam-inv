@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractEdgeFunctionError } from "./functions-error";
+import { extractEdgeFunctionError } from "@/app/lib/functions-error";
 
 describe("extractEdgeFunctionError", () => {
   it("extracts duplicate email (HTTP 409) message correctly", async () => {
@@ -72,9 +72,7 @@ describe("extractEdgeFunctionError", () => {
 
     const result = await extractEdgeFunctionError(fnError, null);
     expect(result.errorCode).toBe("password_too_short");
-    expect(result.message).toBe(
-      "Password must contain at least 6 characters.",
-    );
+    expect(result.message).toBe("Password must contain at least 6 characters.");
     expect(result.status).toBe(400);
   });
 
@@ -148,9 +146,7 @@ describe("extractEdgeFunctionError", () => {
 
     const result = await extractEdgeFunctionError(fnError, null);
     expect(result.errorCode).toBe("forbidden");
-    expect(result.message).toBe(
-      "You do not have permission to create users.",
-    );
+    expect(result.message).toBe("You do not have permission to create users.");
     expect(result.status).toBe(403);
   });
 
