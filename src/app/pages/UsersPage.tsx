@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import {
   Users,
   UserPlus,
@@ -31,6 +31,7 @@ import { supabase } from "@/app/lib/supabase";
 import { useAuth } from "@/app/lib/auth";
 import { formatDateTime } from "@/app/lib/format";
 import { extractEdgeFunctionError } from "@/app/lib/functions-error";
+import { useFormErrorVisibility } from "@/app/lib/useFormErrorVisibility";
 import type { Database } from "@/types/database";
 
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
@@ -538,6 +539,7 @@ function AddUserModal({
   const [role, setRole] = useState<UserRole>("normal_user");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
 
   // Field-specific server/validation errors
   const [nameServerError, setNameServerError] = useState<string | null>(null);
@@ -577,6 +579,16 @@ function AddUserModal({
     ((hasSubmitted || touched.password || password.length > 0) && !isPasswordValid
       ? "Password must contain at least 6 characters."
       : null);
+
+  useFormErrorVisibility({
+    error,
+    formErrors: {
+      fullName: fullNameError,
+      email: emailError,
+      password: passwordError,
+    },
+    containerRef: modalRef,
+  });
 
   const canSubmit = !saving && isNameValid && isEmailValid && isPasswordValid;
 
@@ -707,8 +719,8 @@ function AddUserModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-      <div className="relative w-full max-w-md rounded-xl bg-card p-6 shadow-2xl border">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
+      <div ref={modalRef} className="relative w-full max-w-md rounded-xl bg-card p-6 shadow-2xl border my-8">
         <div className="flex items-center justify-between pb-3 border-b">
           <div className="flex items-center gap-2">
             <UserPlus className="h-5 w-5 text-brand-blue" />
@@ -727,7 +739,7 @@ function AddUserModal({
         </div>
 
         {error && (
-          <div className="mt-3 rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-xs text-destructive flex items-center justify-between gap-2">
+          <div role="alert" className="mt-3 rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-xs text-destructive flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{error}</span>
@@ -756,12 +768,13 @@ function AddUserModal({
 
           {/* Full Name */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">
+            <Label htmlFor="fullName" className="text-xs font-semibold">
               Full Name <span className="text-destructive">*</span>
             </Label>
             <div className="relative">
               <User className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
               <Input
+                id="fullName"
                 placeholder="e.g. Ramesh Kumar"
                 value={fullName}
                 onChange={(e) => handleFullNameChange(e.target.value)}
@@ -769,13 +782,14 @@ function AddUserModal({
                   setTouched((prev) => ({ ...prev, fullName: true }))
                 }
                 disabled={saving}
+                aria-invalid={!!fullNameError}
                 className="h-9 pl-8 text-xs"
                 required
                 autoFocus
               />
             </div>
             {fullNameError && (
-              <p className="text-[11px] text-destructive flex items-center gap-1 mt-1">
+              <p role="alert" className="text-[11px] text-destructive flex items-center gap-1 mt-1">
                 <AlertCircle className="h-3 w-3 shrink-0" />
                 <span>{fullNameError}</span>
               </p>
@@ -784,12 +798,13 @@ function AddUserModal({
 
           {/* Email */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">
+            <Label htmlFor="email" className="text-xs font-semibold">
               Login Email Address <span className="text-destructive">*</span>
             </Label>
             <div className="relative">
               <Mail className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
               <Input
+                id="email"
                 type="email"
                 placeholder="e.g. staff@shibaam.com"
                 value={email}
@@ -798,12 +813,13 @@ function AddUserModal({
                   setTouched((prev) => ({ ...prev, email: true }))
                 }
                 disabled={saving}
+                aria-invalid={!!emailError}
                 className="h-9 pl-8 text-xs font-mono"
                 required
               />
             </div>
             {emailError && (
-              <p className="text-[11px] text-destructive flex items-center gap-1 mt-1">
+              <p role="alert" className="text-[11px] text-destructive flex items-center gap-1 mt-1">
                 <AlertCircle className="h-3 w-3 shrink-0" />
                 <span>{emailError}</span>
               </p>
@@ -813,7 +829,7 @@ function AddUserModal({
           {/* Initial Password */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label className="text-xs font-semibold">
+              <Label htmlFor="password" className="text-xs font-semibold">
                 Initial Password <span className="text-destructive">*</span>
               </Label>
               <span
@@ -829,6 +845,7 @@ function AddUserModal({
             <div className="relative">
               <KeyRound className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
               <Input
+                id="password"
                 type="password"
                 placeholder="Minimum 6 characters"
                 value={password}
@@ -837,12 +854,13 @@ function AddUserModal({
                   setTouched((prev) => ({ ...prev, password: true }))
                 }
                 disabled={saving}
+                aria-invalid={!!passwordError}
                 className="h-9 pl-8 text-xs font-mono"
                 required
               />
             </div>
             {passwordError && (
-              <p className="text-[11px] text-destructive flex items-center gap-1 mt-1">
+              <p role="alert" className="text-[11px] text-destructive flex items-center gap-1 mt-1">
                 <AlertCircle className="h-3 w-3 shrink-0" />
                 <span>{passwordError}</span>
               </p>
@@ -943,6 +961,12 @@ function ChangeRoleModal({
     user.role === "super_user" ? "normal_user" : "super_user";
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  useFormErrorVisibility({
+    error,
+    containerRef: modalRef,
+  });
 
   async function handleConfirm() {
     setSaving(true);
@@ -973,8 +997,8 @@ function ChangeRoleModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-      <div className="relative w-full max-w-sm rounded-xl bg-card p-6 shadow-2xl border">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
+      <div ref={modalRef} className="relative w-full max-w-sm rounded-xl bg-card p-6 shadow-2xl border my-8">
         <div className="flex items-center justify-between pb-3 border-b">
           <div className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-brand-blue" />
@@ -991,7 +1015,7 @@ function ChangeRoleModal({
         </div>
 
         {error && (
-          <div className="mt-3 rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-xs text-destructive flex items-center gap-2">
+          <div role="alert" className="mt-3 rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-xs text-destructive flex items-center gap-2">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{error}</span>
           </div>
@@ -1083,6 +1107,12 @@ function ToggleStatusModal({
   const targetStatus = !user.is_active;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  useFormErrorVisibility({
+    error,
+    containerRef: modalRef,
+  });
 
   async function handleConfirm() {
     setSaving(true);
@@ -1113,8 +1143,8 @@ function ToggleStatusModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-      <div className="relative w-full max-w-sm rounded-xl bg-card p-6 shadow-2xl border">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
+      <div ref={modalRef} className="relative w-full max-w-sm rounded-xl bg-card p-6 shadow-2xl border my-8">
         <div className="flex items-center justify-between pb-3 border-b">
           <div className="flex items-center gap-2">
             {targetStatus ? (
@@ -1135,7 +1165,7 @@ function ToggleStatusModal({
         </div>
 
         {error && (
-          <div className="mt-3 rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-xs text-destructive flex items-center gap-2">
+          <div role="alert" className="mt-3 rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-xs text-destructive flex items-center gap-2">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{error}</span>
           </div>
@@ -1214,6 +1244,12 @@ function EditNameModal({
   const [name, setName] = useState(user.full_name || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  useFormErrorVisibility({
+    error,
+    containerRef: modalRef,
+  });
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -1242,8 +1278,8 @@ function EditNameModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-      <div className="relative w-full max-w-sm rounded-xl bg-card p-6 shadow-2xl border">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
+      <div ref={modalRef} className="relative w-full max-w-sm rounded-xl bg-card p-6 shadow-2xl border my-8">
         <div className="flex items-center justify-between pb-3 border-b">
           <div className="flex items-center gap-2">
             <Edit2 className="h-5 w-5 text-brand-blue" />
@@ -1260,7 +1296,7 @@ function EditNameModal({
         </div>
 
         {error && (
-          <div className="mt-3 rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-xs text-destructive flex items-center gap-2">
+          <div role="alert" className="mt-3 rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-xs text-destructive flex items-center gap-2">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{error}</span>
           </div>

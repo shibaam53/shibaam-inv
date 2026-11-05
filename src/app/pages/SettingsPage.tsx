@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/app/lib/supabase";
+import { useFormErrorVisibility } from "@/app/lib/useFormErrorVisibility";
 import type { Database } from "@/types/database";
 
 type Category = Database["public"]["Tables"]["categories"]["Row"];
@@ -113,6 +114,7 @@ function CategoriesSection() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  useFormErrorVisibility({ error });
   const [newCategoryName, setNewCategoryName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
@@ -268,7 +270,7 @@ function CategoriesSection() {
         </CardHeader>
         <CardContent className="grid gap-4">
           {error && (
-            <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+            <div role="alert" className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{error}</span>
             </div>
@@ -361,6 +363,7 @@ function UomsSection() {
   const [uoms, setUoms] = useState<Uom[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  useFormErrorVisibility({ error });
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [dimension, setDimension] = useState<UomDimension>("length");
@@ -522,7 +525,7 @@ function UomsSection() {
         </CardHeader>
         <CardContent className="grid gap-4">
           {error && (
-            <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+            <div role="alert" className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{error}</span>
             </div>
@@ -573,6 +576,7 @@ function SwgSection() {
   const [swgList, setSwgList] = useState<SwgRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  useFormErrorVisibility({ error });
   const [searchQuery, setSearchQuery] = useState("");
   const [gauge, setGauge] = useState("");
   const [diameterMm, setDiameterMm] = useState("");
@@ -812,7 +816,7 @@ function SwgSection() {
         </CardHeader>
         <CardContent className="grid gap-4">
           {error && (
-            <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+            <div role="alert" className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{error}</span>
             </div>
@@ -899,6 +903,7 @@ function ConversionsSection() {
   const [uoms, setUoms] = useState<Uom[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  useFormErrorVisibility({ error });
   const [fromUomId, setFromUomId] = useState("");
   const [toUomId, setToUomId] = useState("");
   const [factor, setFactor] = useState("");
@@ -1138,7 +1143,7 @@ function ConversionsSection() {
         </CardHeader>
         <CardContent className="grid gap-4">
           {error && (
-            <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+            <div role="alert" className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{error}</span>
             </div>

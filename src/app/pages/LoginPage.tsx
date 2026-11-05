@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/app/lib/auth";
+import { useFormErrorVisibility } from "@/app/lib/useFormErrorVisibility";
 
 const schema = z.object({
   email: z.string().trim().email("Enter a valid email address"),
@@ -26,11 +27,18 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [error, setError] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({ resolver: zodResolver(schema) });
+
+  useFormErrorVisibility({
+    error: error ?? notice,
+    formErrors: errors,
+    containerRef: formRef,
+  });
 
   const from =
     (location.state as { from?: string } | null)?.from ?? "/app/dashboard";
@@ -61,6 +69,7 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent>
           <form
+            ref={formRef}
             onSubmit={handleSubmit(onSubmit)}
             className="grid gap-4"
             noValidate

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useTransition } from "react";
+import { useEffect, useState, useMemo, useTransition, useRef } from "react";
 import {
   Plus,
   Search,
@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/app/lib/supabase";
 import { formatQty, getProductStockBalance } from "@/app/lib/format";
+import { useFormErrorVisibility } from "@/app/lib/useFormErrorVisibility";
 import type { Database } from "@/types/database";
 
 type Category = Database["public"]["Tables"]["categories"]["Row"];
@@ -731,6 +732,12 @@ function ProductFormModal({
 
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useFormErrorVisibility({
+    error,
+    containerRef: formRef,
+  });
 
   // Permitted secondary UOMs state: map of uom_id -> { permitted, requires_measurement }
   const [permittedUomConfigs, setPermittedUomConfigs] = useState<
@@ -1015,9 +1022,9 @@ function ProductFormModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 grid gap-5 overflow-y-auto flex-1">
+        <form ref={formRef} onSubmit={handleSubmit} className="p-6 grid gap-5 overflow-y-auto flex-1">
           {error && (
-            <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+            <div role="alert" className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{error}</span>
             </div>

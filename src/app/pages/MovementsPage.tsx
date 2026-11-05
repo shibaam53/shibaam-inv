@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import {
   Plus,
   Minus,
@@ -33,6 +33,7 @@ import {
   type ProductItem as ProductSummary,
   getProductStockBalance,
 } from "@/app/components/ProductSelector";
+import { useFormErrorVisibility } from "@/app/lib/useFormErrorVisibility";
 
 type MovementType = Database["public"]["Enums"]["movement_type"];
 type BillStatus = Database["public"]["Enums"]["bill_status"];
@@ -1064,6 +1065,12 @@ function AddStockModal({
 
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+  const formRef = useRef<HTMLDivElement>(null);
+
+  useFormErrorVisibility({
+    error: modalError,
+    containerRef: formRef,
+  });
 
   const selectedProduct = useMemo(() => {
     return products.find((p) => p.id === productId) || null;
@@ -1237,7 +1244,7 @@ function AddStockModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
-      <div className="relative w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl border my-8">
+      <div ref={formRef} className="relative w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl border my-8">
         <div className="flex items-center justify-between pb-3 border-b">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
@@ -1261,7 +1268,7 @@ function AddStockModal({
         </div>
 
         {modalError && (
-          <div className="mt-4 flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-xs text-destructive">
+          <div role="alert" className="mt-4 flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-xs text-destructive">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{modalError}</span>
           </div>
@@ -1503,6 +1510,12 @@ function RemoveStockModal({
 
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+  const formRef = useRef<HTMLDivElement>(null);
+
+  useFormErrorVisibility({
+    error: modalError,
+    containerRef: formRef,
+  });
 
   const selectedProduct = useMemo(() => {
     return products.find((p) => p.id === productId) || null;
@@ -1746,7 +1759,7 @@ function RemoveStockModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
-      <div className="relative w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl border my-8">
+      <div ref={formRef} className="relative w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl border my-8">
         <div className="flex items-center justify-between pb-3 border-b">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
@@ -1770,7 +1783,7 @@ function RemoveStockModal({
         </div>
 
         {modalError && (
-          <div className="mt-4 flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-xs text-destructive">
+          <div role="alert" className="mt-4 flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-xs text-destructive">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{modalError}</span>
           </div>
@@ -2043,6 +2056,12 @@ function OpeningStockModal({
   const [reference, setReference] = useState("");
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+  const formRef = useRef<HTMLDivElement>(null);
+
+  useFormErrorVisibility({
+    error: modalError,
+    containerRef: formRef,
+  });
 
   const selectedProduct = useMemo(() => {
     return products.find((p) => p.id === productId) || null;
@@ -2099,7 +2118,7 @@ function OpeningStockModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
-      <div className="relative w-full max-w-md rounded-xl bg-card p-6 shadow-2xl border my-8">
+      <div ref={formRef} className="relative w-full max-w-md rounded-xl bg-card p-6 shadow-2xl border my-8">
         <div className="flex items-center justify-between pb-3 border-b">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-100 text-purple-700">
@@ -2123,7 +2142,7 @@ function OpeningStockModal({
         </div>
 
         {modalError && (
-          <div className="mt-4 flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-xs text-destructive">
+          <div role="alert" className="mt-4 flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-xs text-destructive">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{modalError}</span>
           </div>
@@ -2238,6 +2257,12 @@ function CorrectionModal({
 
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+  const formRef = useRef<HTMLDivElement>(null);
+
+  useFormErrorVisibility({
+    error: modalError,
+    containerRef: formRef,
+  });
 
   const selectedProduct = useMemo(() => {
     return products.find((p) => p.id === productId) || null;
@@ -2319,7 +2344,7 @@ function CorrectionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
-      <div className="relative w-full max-w-md rounded-xl bg-card p-6 shadow-2xl border my-8">
+      <div ref={formRef} className="relative w-full max-w-md rounded-xl bg-card p-6 shadow-2xl border my-8">
         <div className="flex items-center justify-between pb-3 border-b">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
@@ -2343,7 +2368,7 @@ function CorrectionModal({
         </div>
 
         {modalError && (
-          <div className="mt-4 flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-xs text-destructive">
+          <div role="alert" className="mt-4 flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-xs text-destructive">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{modalError}</span>
           </div>
@@ -2493,6 +2518,12 @@ function ReverseMovementModal({
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+  const formRef = useRef<HTMLDivElement>(null);
+
+  useFormErrorVisibility({
+    error: modalError,
+    containerRef: formRef,
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2526,7 +2557,7 @@ function ReverseMovementModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
-      <div className="relative w-full max-w-md rounded-xl bg-card p-6 shadow-2xl border my-8">
+      <div ref={formRef} className="relative w-full max-w-md rounded-xl bg-card p-6 shadow-2xl border my-8">
         <div className="flex items-center justify-between pb-3 border-b">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-100 text-rose-700">
@@ -2550,7 +2581,7 @@ function ReverseMovementModal({
         </div>
 
         {modalError && (
-          <div className="mt-4 flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-xs text-destructive">
+          <div role="alert" className="mt-4 flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-xs text-destructive">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{modalError}</span>
           </div>
