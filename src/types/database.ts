@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -209,27 +209,18 @@ export type Database = {
       product_perforation: {
         Row: {
           hole_diameter_mm: number
-          hole_pattern: Database["public"]["Enums"]["hole_pattern"]
-          hole_shape: Database["public"]["Enums"]["hole_shape"]
           pitch_mm: number
           product_id: string
-          thickness_mm: number | null
         }
         Insert: {
           hole_diameter_mm: number
-          hole_pattern: Database["public"]["Enums"]["hole_pattern"]
-          hole_shape?: Database["public"]["Enums"]["hole_shape"]
           pitch_mm: number
           product_id: string
-          thickness_mm?: number | null
         }
         Update: {
           hole_diameter_mm?: number
-          hole_pattern?: Database["public"]["Enums"]["hole_pattern"]
-          hole_shape?: Database["public"]["Enums"]["hole_shape"]
           pitch_mm?: number
           product_id?: string
-          thickness_mm?: number | null
         }
         Relationships: [
           {
@@ -720,12 +711,8 @@ export type Database = {
       perforated_sheet_specs: {
         Row: {
           hole_diameter_mm: number | null
-          hole_pattern: Database["public"]["Enums"]["hole_pattern"] | null
-          hole_shape: Database["public"]["Enums"]["hole_shape"] | null
-          open_area_pct: number | null
           pitch_mm: number | null
           product_id: string | null
-          thickness_mm: number | null
         }
         Relationships: [
           {

@@ -31,8 +31,6 @@ type Category = Database["public"]["Tables"]["categories"]["Row"];
 type Uom = Database["public"]["Tables"]["uoms"]["Row"];
 type SwgRow = Database["public"]["Tables"]["swg_reference"]["Row"];
 type ProductTrackingMode = Database["public"]["Enums"]["tracking_mode"];
-type HolePattern = Database["public"]["Enums"]["hole_pattern"];
-type HoleShape = Database["public"]["Enums"]["hole_shape"];
 
 export type ProductWithDetails =
   Database["public"]["Tables"]["products"]["Row"] & {
@@ -408,7 +406,7 @@ export default function ProductsPage() {
                         {p.perforation && (
                           <div className="col-span-2 text-[11px] text-muted-foreground border-t pt-1.5 mt-0.5">
                             <span className="text-primary font-medium">
-                              Ø{p.perforation.hole_diameter_mm}mm · P={p.perforation.pitch_mm}mm ({p.perforation.hole_pattern.replace("_", " ")})
+                              Ø{p.perforation.hole_diameter_mm}mm · Pitch {p.perforation.pitch_mm}mm
                             </span>
                           </div>
                         )}
@@ -722,12 +720,6 @@ function ProductFormModal({
 
   // Perforation Toggle & fields
   const [isPerforated, setIsPerforated] = useState(!!product?.perforation);
-  const [holeShape, setHoleShape] = useState<HoleShape>(
-    product?.perforation?.hole_shape ?? "round",
-  );
-  const [holePattern, setHolePattern] = useState<HolePattern>(
-    product?.perforation?.hole_pattern ?? "staggered_60",
-  );
   const [holeDiameter, setHoleDiameter] = useState(
     product?.perforation?.hole_diameter_mm
       ? String(product.perforation.hole_diameter_mm)
@@ -736,34 +728,9 @@ function ProductFormModal({
   const [pitch, setPitch] = useState(
     product?.perforation?.pitch_mm ? String(product.perforation.pitch_mm) : "",
   );
-  const [thickness, setThickness] = useState(
-    product?.perforation?.thickness_mm
-      ? String(product.perforation.thickness_mm)
-      : "",
-  );
 
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-
-  // Calculated open area preview for round holes
-  const openAreaPreview = useMemo(() => {
-    if (!isPerforated || holeShape !== "round") return null;
-    const d = parseFloat(holeDiameter);
-    const p = parseFloat(pitch);
-    if (isNaN(d) || isNaN(p) || d <= 0 || p <= 0 || p <= d) return null;
-
-    if (holePattern === "staggered_60") {
-      // (π / (2 * √3)) * (d / p)^2 * 100
-      const pct = (Math.PI / (2 * Math.sqrt(3))) * Math.pow(d / p, 2) * 100;
-      return pct.toFixed(2);
-    }
-    if (holePattern === "straight_90") {
-      // (π / 4) * (d / p)^2 * 100
-      const pct = (Math.PI / 4) * Math.pow(d / p, 2) * 100;
-      return pct.toFixed(2);
-    }
-    return null;
-  }, [isPerforated, holeShape, holePattern, holeDiameter, pitch]);
 
   // Permitted secondary UOMs state: map of uom_id -> { permitted, requires_measurement }
   const [permittedUomConfigs, setPermittedUomConfigs] = useState<
@@ -810,13 +777,45 @@ function ProductFormModal({
 
     // Perforation validation
     if (isPerforated) {
+      if (!holeDiameter.trim()) {
+        return setError("Hole diameter in mm is required for perforated sheets.");
+      }
       const d = parseFloat(holeDiameter);
+      if (isNaN(d) || d <= 0) {
+        return setError("Valid positive hole diameter in mm is required.");
+      }
+      if (!pitch.trim()) {
+        return setError("Pitch in mm is required for perforated sheets.");
+      }
       const p = parseFloat(pitch);
-      if (isNaN(d) || d <= 0)
-        return setError("Valid hole diameter in mm is required.");
-      if (isNaN(p) || p <= 0) return setError("Valid pitch in mm is required.");
-      if (holeShape === "round" && p <= d) {
+      if (isNaN(p) || p <= 0) {
+        return setError("Valid positive pitch in mm is required.");
+      }
+      if (p <= d) {
         return setError("Pitch must be greater than hole diameter (p > d).");
+      }
+    } else {
+      // Optional when unchecked: if either is entered, validate format and pair
+      const hasD = holeDiameter.trim() !== "";
+      const hasP = pitch.trim() !== "";
+      if (hasD || hasP) {
+        if (hasD && !hasP) {
+          return setError("Please also provide pitch in mm, or clear hole diameter.");
+        }
+        if (!hasD && hasP) {
+          return setError("Please also provide hole diameter in mm, or clear pitch.");
+        }
+        const d = parseFloat(holeDiameter);
+        const p = parseFloat(pitch);
+        if (isNaN(d) || d <= 0) {
+          return setError("Valid positive hole diameter in mm is required.");
+        }
+        if (isNaN(p) || p <= 0) {
+          return setError("Valid positive pitch in mm is required.");
+        }
+        if (p <= d) {
+          return setError("Pitch must be greater than hole diameter (p > d).");
+        }
       }
     }
 
@@ -851,11 +850,8 @@ function ProductFormModal({
               .from("product_perforation")
               .insert({
                 product_id: newProd.id,
-                hole_shape: holeShape,
-                hole_pattern: holePattern,
                 hole_diameter_mm: Number(holeDiameter),
                 pitch_mm: Number(pitch),
-                thickness_mm: thickness ? Number(thickness) : null,
               })
               .select()
               .single();
@@ -932,11 +928,8 @@ function ProductFormModal({
                 .from("product_perforation")
                 .upsert({
                   product_id: product.id,
-                  hole_shape: holeShape,
-                  hole_pattern: holePattern,
                   hole_diameter_mm: Number(holeDiameter),
                   pitch_mm: Number(pitch),
-                  thickness_mm: thickness ? Number(thickness) : null,
                 })
                 .select()
                 .single();
@@ -1029,6 +1022,41 @@ function ProductFormModal({
               <span>{error}</span>
             </div>
           )}
+
+          {/* Primary Product Type: Perforated Sheet Checkbox (First Control) */}
+          <div className="rounded-lg border bg-muted/40 p-3.5 flex items-center justify-between">
+            <div className="space-y-0.5">
+              <label
+                htmlFor="top-is-perforated"
+                className="text-sm font-semibold text-foreground flex items-center gap-2.5 cursor-pointer select-none"
+              >
+                <input
+                  id="top-is-perforated"
+                  type="checkbox"
+                  checked={isPerforated}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setIsPerforated(checked);
+                    if (!checked) {
+                      setHoleDiameter("");
+                      setPitch("");
+                    }
+                  }}
+                  disabled={isPending || hasMovements}
+                  className="rounded border-input text-brand-blue focus:ring-brand-blue h-4 w-4 cursor-pointer disabled:cursor-not-allowed"
+                />
+                <span>Perforated Sheet</span>
+              </label>
+              <p className="text-xs text-muted-foreground pl-6.5">
+                Check if this product is a perforated sheet (requires hole diameter & pitch).
+              </p>
+            </div>
+            {isPerforated && (
+              <span className="text-[11px] font-semibold text-brand-blue bg-brand-blue/10 border border-brand-blue/20 px-2 py-0.5 rounded-full shrink-0">
+                Perforated Sheet
+              </span>
+            )}
+          </div>
 
           {hasMovements && (
             <p className="text-xs text-amber-800 bg-amber-50 p-2.5 rounded border border-amber-200">
@@ -1328,144 +1356,60 @@ function ProductFormModal({
 
           {/* Section: Perforated Sheet Specifications */}
           <div className="border-t pt-4">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <span className="font-semibold text-sm flex items-center gap-1.5">
-                  <Sliders className="h-4 w-4 text-brand-blue" />
-                  Perforated Sheet Specifications
-                </span>
-                <p className="text-xs text-muted-foreground">
-                  Hole diameter and pitch (centre-to-centre distance) determine
-                  Open Area %.
-                </p>
-              </div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isPerforated}
-                  onChange={(e) => setIsPerforated(e.target.checked)}
-                  disabled={isPending || hasMovements}
-                  className="rounded border-input text-primary focus:ring-primary h-4 w-4"
-                />
-                <span className="text-xs font-medium">Perforated Sheet</span>
-              </label>
+            <div className="mb-3">
+              <span className="font-semibold text-sm flex items-center gap-1.5">
+                <Sliders className="h-4 w-4 text-brand-blue" />
+                Perforated Sheet Specifications
+              </span>
+              <p className="text-xs text-muted-foreground">
+                Hole diameter and pitch (centre-to-centre distance).
+                {isPerforated
+                  ? " Required when Perforated Sheet is selected."
+                  : " Optional when Perforated Sheet is unchecked."}
+              </p>
             </div>
 
-            {isPerforated && (
-              <div className="rounded-md border p-4 bg-muted/20 grid gap-4">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="grid gap-1">
-                    <Label htmlFor="hole-pattern" className="text-xs">
-                      Hole Pattern
-                    </Label>
-                    <select
-                      id="hole-pattern"
-                      value={holePattern}
-                      onChange={(e) =>
-                        setHolePattern(e.target.value as HolePattern)
-                      }
-                      className="flex h-8 w-full rounded-md border border-input bg-transparent px-2.5 py-1 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      disabled={isPending || hasMovements}
-                    >
-                      <option value="staggered_60">
-                        60° Staggered (Equilateral triangle)
-                      </option>
-                      <option value="straight_90">
-                        90° Straight (Square layout)
-                      </option>
-                      <option value="other">Other Pattern</option>
-                    </select>
-                  </div>
-
-                  <div className="grid gap-1">
-                    <Label htmlFor="hole-shape" className="text-xs">
-                      Hole Shape
-                    </Label>
-                    <select
-                      id="hole-shape"
-                      value={holeShape}
-                      onChange={(e) =>
-                        setHoleShape(e.target.value as HoleShape)
-                      }
-                      className="flex h-8 w-full rounded-md border border-input bg-transparent px-2.5 py-1 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      disabled={isPending || hasMovements}
-                    >
-                      <option value="round">Round</option>
-                      <option value="other">Other Shape</option>
-                    </select>
-                  </div>
+            <div className="rounded-md border p-4 bg-muted/20 grid gap-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-1">
+                  <Label htmlFor="hole-diam" className="text-xs">
+                    Hole Diameter (d in mm) {isPerforated && <span className="text-destructive">*</span>}
+                  </Label>
+                  <Input
+                    id="hole-diam"
+                    type="number"
+                    step="any"
+                    placeholder="e.g. 3.0"
+                    value={holeDiameter}
+                    onChange={(e) => setHoleDiameter(e.target.value)}
+                    disabled={isPending || hasMovements}
+                    className="h-8 text-xs"
+                  />
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="grid gap-1">
-                    <Label htmlFor="hole-diam" className="text-xs">
-                      Hole Diameter (d in mm) *
-                    </Label>
-                    <Input
-                      id="hole-diam"
-                      type="number"
-                      step="any"
-                      placeholder="e.g. 3.0"
-                      value={holeDiameter}
-                      onChange={(e) => setHoleDiameter(e.target.value)}
-                      disabled={isPending || hasMovements}
-                      className="h-8 text-xs"
-                    />
-                  </div>
-
-                  <div className="grid gap-1">
-                    <Label
-                      htmlFor="hole-pitch"
-                      className="text-xs font-semibold text-brand-blue"
-                    >
-                      Pitch (p in mm) *
-                    </Label>
-                    <Input
-                      id="hole-pitch"
-                      type="number"
-                      step="any"
-                      placeholder="e.g. 5.0"
-                      value={pitch}
-                      onChange={(e) => setPitch(e.target.value)}
-                      disabled={isPending || hasMovements}
-                      className="h-8 text-xs font-medium"
-                    />
-                    <p className="text-[10px] text-muted-foreground">
-                      Centre-to-centre distance (p &gt; d)
-                    </p>
-                  </div>
-
-                  <div className="grid gap-1">
-                    <Label htmlFor="sheet-thickness" className="text-xs">
-                      Thickness (mm)
-                    </Label>
-                    <Input
-                      id="sheet-thickness"
-                      type="number"
-                      step="any"
-                      placeholder="e.g. 1.5"
-                      value={thickness}
-                      onChange={(e) => setThickness(e.target.value)}
-                      disabled={isPending || hasMovements}
-                      className="h-8 text-xs"
-                    />
-                  </div>
+                <div className="grid gap-1">
+                  <Label
+                    htmlFor="hole-pitch"
+                    className="text-xs font-semibold text-brand-blue"
+                  >
+                    Pitch (p in mm) {isPerforated && <span className="text-destructive">*</span>}
+                  </Label>
+                  <Input
+                    id="hole-pitch"
+                    type="number"
+                    step="any"
+                    placeholder="e.g. 5.0"
+                    value={pitch}
+                    onChange={(e) => setPitch(e.target.value)}
+                    disabled={isPending || hasMovements}
+                    className="h-8 text-xs font-medium"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Centre-to-centre distance (p &gt; d)
+                  </p>
                 </div>
-
-                {/* Open Area Live Calculation Preview */}
-                {openAreaPreview !== null && (
-                  <div className="flex items-center justify-between rounded bg-primary/10 border border-primary/20 p-2.5 text-xs text-primary">
-                    <span className="font-medium">Derived Open Area:</span>
-                    <span className="font-mono font-bold text-sm">
-                      {openAreaPreview}%
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">
-                      (Formula preview: database calculates authoritative)
-                    </span>
-                  </div>
-                )}
               </div>
-            )}
+            </div>
           </div>
 
           <div className="flex items-center justify-end gap-2 border-t pt-4">
@@ -1655,18 +1599,6 @@ function ProductDetailsModal({
                   <span className="text-muted-foreground">Pitch (p):</span>{" "}
                   <span className="font-mono font-bold text-brand-blue">
                     {product.perforation.pitch_mm} mm
-                  </span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Pattern:</span>{" "}
-                  <span className="font-medium capitalize">
-                    {product.perforation.hole_pattern.replace("_", " ")}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Thickness:</span>{" "}
-                  <span className="font-mono font-medium">
-                    {product.perforation.thickness_mm ?? "—"} mm
                   </span>
                 </div>
               </div>
