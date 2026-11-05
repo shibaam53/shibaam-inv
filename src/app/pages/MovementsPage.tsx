@@ -464,7 +464,7 @@ export default function MovementsPage() {
             <div className="relative min-w-[220px] flex-1">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search product code, name, invoice #, reason..."
+                placeholder="Search product code, name, reference, reason..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9 h-9 text-sm"
@@ -1089,7 +1089,6 @@ function AddStockModal({
   const [measuredBaseQty, setMeasuredBaseQty] = useState<string>("");
   const [rollLabel, setRollLabel] = useState<string>("");
   const [billStatus, setBillStatus] = useState<BillStatus | null>(null);
-  const [billReference, setBillReference] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
 
   const [saving, setSaving] = useState(false);
@@ -1235,9 +1234,7 @@ function AddStockModal({
 
     setSaving(true);
     try {
-      const fullReference = [billReference.trim(), notes.trim()]
-        .filter(Boolean)
-        .join(" | ");
+      const movementReference = notes.trim() || undefined;
 
       const { data, error: rpcErr } = await supabase.rpc("add_stock", {
         p_product_id: productId,
@@ -1251,7 +1248,7 @@ function AddStockModal({
           selectedProduct?.tracking_mode === "roll"
             ? rollLabel.trim()
             : undefined,
-        p_reference: fullReference || undefined,
+        p_reference: movementReference,
       });
 
       if (rpcErr) throw rpcErr;
@@ -1492,21 +1489,6 @@ function AddStockModal({
                 required
               />
 
-              {/* Optional Bill Reference (revealed when With Bill is selected) */}
-              {billStatus === "with_bill" && (
-                <div className="space-y-1.5 animate-in fade-in">
-                  <Label className="text-xs font-semibold">
-                    Bill / Invoice Reference
-                  </Label>
-                  <Input
-                    placeholder="e.g. INV-2026-089 or Challan #1042"
-                    value={billReference}
-                    onChange={(e) => setBillReference(e.target.value)}
-                    className="h-8 text-xs font-mono"
-                  />
-                </div>
-              )}
-
               {/* General Reference / Notes */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold">
@@ -1576,7 +1558,6 @@ function RemoveStockModal({
   const [loadingBalance, setLoadingBalance] = useState<boolean>(false);
 
   const [billStatus, setBillStatus] = useState<BillStatus | null>(null);
-  const [billReference, setBillReference] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
 
   const [saving, setSaving] = useState(false);
@@ -1792,9 +1773,7 @@ function RemoveStockModal({
 
     setSaving(true);
     try {
-      const fullReference = [billReference.trim(), notes.trim()]
-        .filter(Boolean)
-        .join(" | ");
+      const movementReference = notes.trim() || undefined;
 
       const { data, error: rpcErr } = await supabase.rpc("remove_stock", {
         p_product_id: productId,
@@ -1808,7 +1787,7 @@ function RemoveStockModal({
           selectedProduct?.tracking_mode === "roll"
             ? selectedRollId
             : undefined,
-        p_reference: fullReference || undefined,
+        p_reference: movementReference,
       });
 
       if (rpcErr) throw rpcErr;
@@ -2091,21 +2070,6 @@ function RemoveStockModal({
                 onChange={setBillStatus}
                 required
               />
-
-              {/* Optional Bill Reference */}
-              {billStatus === "with_bill" && (
-                <div className="space-y-1.5 animate-in fade-in">
-                  <Label className="text-xs font-semibold">
-                    Bill / Invoice Reference
-                  </Label>
-                  <Input
-                    placeholder="e.g. INV-2026-090 or Challan #552"
-                    value={billReference}
-                    onChange={(e) => setBillReference(e.target.value)}
-                    className="h-8 text-xs font-mono"
-                  />
-                </div>
-              )}
 
               {/* General Reference / Notes */}
               <div className="space-y-1.5">
@@ -2760,7 +2724,7 @@ function ReverseMovementModal({
             </Label>
             <textarea
               rows={3}
-              placeholder="Explain why this movement is being reversed (e.g. entered wrong quantity or duplicate invoice)"
+              placeholder="Explain why this movement is being reversed (e.g. entered wrong quantity or clerical error)"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               className="w-full rounded-md border border-input bg-background p-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
