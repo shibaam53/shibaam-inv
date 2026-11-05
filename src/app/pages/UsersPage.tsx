@@ -30,6 +30,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/app/lib/supabase";
 import { useAuth } from "@/app/lib/auth";
 import { formatDateTime } from "@/app/lib/format";
+import { extractEdgeFunctionError } from "@/app/lib/functions-error";
 import type { Database } from "@/types/database";
 
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
@@ -538,18 +539,87 @@ function AddUserModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isPasswordValid = password.length >= 10;
-  const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  // Field-specific server/validation errors
+  const [nameServerError, setNameServerError] = useState<string | null>(null);
+  const [emailServerError, setEmailServerError] = useState<string | null>(null);
+  const [passwordServerError, setPasswordServerError] = useState<string | null>(null);
+
+  // Touch states
+  const [touched, setTouched] = useState({
+    fullName: false,
+    email: false,
+    password: false,
+  });
+  const [hasSubmitted, setHasSubmitted] = useState(false);
+
+  const cleanName = fullName.trim();
+  const cleanEmail = email.trim().toLowerCase();
+
+  const isPasswordValid = password.length >= 6;
+  const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail);
+  const isNameValid = cleanName.length > 0;
+
+  // Inline validation error messages
+  const fullNameError =
+    nameServerError ||
+    ((hasSubmitted || touched.fullName) && !isNameValid
+      ? "Please enter the user's full name."
+      : null);
+
+  const emailError =
+    emailServerError ||
+    ((hasSubmitted || touched.email || email.length > 0) && !isEmailValid
+      ? "Please enter a valid email address."
+      : null);
+
+  const passwordError =
+    passwordServerError ||
+    ((hasSubmitted || touched.password || password.length > 0) && !isPasswordValid
+      ? "Password must contain at least 6 characters."
+      : null);
+
+  const canSubmit = !saving && isNameValid && isEmailValid && isPasswordValid;
+
+  function handleFullNameChange(value: string) {
+    setFullName(value);
+    if (nameServerError) setNameServerError(null);
+    if (error && error.toLowerCase().includes("full name")) {
+      setError(null);
+    }
+  }
+
+  function handleEmailChange(value: string) {
+    setEmail(value);
+    if (emailServerError) setEmailServerError(null);
+    if (
+      error &&
+      (error.toLowerCase().includes("email") ||
+        error.toLowerCase().includes("account"))
+    ) {
+      setError(null);
+    }
+  }
+
+  function handlePasswordChange(value: string) {
+    setPassword(value);
+    if (passwordServerError) setPasswordServerError(null);
+    if (error && error.toLowerCase().includes("password")) {
+      setError(null);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
+    if (saving) return;
 
-    const cleanName = fullName.trim();
-    const cleanEmail = email.trim().toLowerCase();
+    setHasSubmitted(true);
+    setError(null);
+    setNameServerError(null);
+    setEmailServerError(null);
+    setPasswordServerError(null);
 
     if (!cleanName) {
-      setError("Please enter the staff member's full name.");
+      setError("Please enter the user's full name.");
       return;
     }
     if (!isEmailValid) {
@@ -557,7 +627,7 @@ function AddUserModal({
       return;
     }
     if (!isPasswordValid) {
-      setError("Password must be at least 10 characters long.");
+      setError("Password must contain at least 6 characters.");
       return;
     }
 
@@ -576,29 +646,39 @@ function AddUserModal({
       );
 
       if (fnError) {
-        throw new Error(
-          fnError.message || "Failed to create user via Edge Function",
-        );
+        const extracted = await extractEdgeFunctionError(fnError, data);
+        setError(extracted.message);
+
+        if (
+          extracted.errorCode === "email_already_exists" ||
+          extracted.status === 409
+        ) {
+          setEmailServerError(extracted.message);
+        } else if (extracted.errorCode === "invalid_email") {
+          setEmailServerError(extracted.message);
+        } else if (extracted.errorCode === "password_too_short") {
+          setPasswordServerError(extracted.message);
+        } else if (extracted.errorCode === "full_name_required") {
+          setNameServerError(extracted.message);
+        }
+        return;
       }
 
-      // Check if function returned an error payload
+      // Check if function returned an error payload in data
       if (data && typeof data === "object" && "error" in data) {
-        const errCode = (data as { error: string }).error;
-        if (errCode === "could_not_create_user") {
-          throw new Error(
-            "Could not create user. This email address may already be registered.",
-          );
-        } else if (errCode === "password_too_short") {
-          throw new Error("Password must be at least 10 characters long.");
-        } else if (errCode === "invalid_email") {
-          throw new Error("Invalid email format.");
-        } else if (errCode === "forbidden") {
-          throw new Error(
-            "Access denied: only active Super Users can create staff accounts.",
-          );
-        } else {
-          throw new Error(`Creation failed: ${errCode}`);
+        const extracted = await extractEdgeFunctionError(null, data);
+        setError(extracted.message);
+
+        if (extracted.errorCode === "email_already_exists") {
+          setEmailServerError(extracted.message);
+        } else if (extracted.errorCode === "invalid_email") {
+          setEmailServerError(extracted.message);
+        } else if (extracted.errorCode === "password_too_short") {
+          setPasswordServerError(extracted.message);
+        } else if (extracted.errorCode === "full_name_required") {
+          setNameServerError(extracted.message);
         }
+        return;
       }
 
       const createdUserId = (data as { id?: string })?.id;
@@ -638,16 +718,28 @@ function AddUserModal({
           </div>
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-muted-foreground hover:bg-surface"
+            disabled={saving}
+            className="rounded-md p-1 text-muted-foreground hover:bg-surface disabled:opacity-50"
+            aria-label="Close"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {error && (
-          <div className="mt-3 rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-xs text-destructive flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>{error}</span>
+          <div className="mt-3 rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-xs text-destructive flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setError(null)}
+              className="p-1 text-destructive/80 hover:text-destructive shrink-0"
+              aria-label="Dismiss error notification"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
           </div>
         )}
 
@@ -672,12 +764,22 @@ function AddUserModal({
               <Input
                 placeholder="e.g. Ramesh Kumar"
                 value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
+                onChange={(e) => handleFullNameChange(e.target.value)}
+                onBlur={() =>
+                  setTouched((prev) => ({ ...prev, fullName: true }))
+                }
+                disabled={saving}
                 className="h-9 pl-8 text-xs"
                 required
                 autoFocus
               />
             </div>
+            {fullNameError && (
+              <p className="text-[11px] text-destructive flex items-center gap-1 mt-1">
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                <span>{fullNameError}</span>
+              </p>
+            )}
           </div>
 
           {/* Email */}
@@ -691,11 +793,21 @@ function AddUserModal({
                 type="email"
                 placeholder="e.g. staff@shibaam.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => handleEmailChange(e.target.value)}
+                onBlur={() =>
+                  setTouched((prev) => ({ ...prev, email: true }))
+                }
+                disabled={saving}
                 className="h-9 pl-8 text-xs font-mono"
                 required
               />
             </div>
+            {emailError && (
+              <p className="text-[11px] text-destructive flex items-center gap-1 mt-1">
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                <span>{emailError}</span>
+              </p>
+            )}
           </div>
 
           {/* Initial Password */}
@@ -706,25 +818,35 @@ function AddUserModal({
               </Label>
               <span
                 className={`text-[10px] font-mono ${
-                  password.length >= 10
+                  password.length >= 6
                     ? "text-emerald-700 font-semibold"
                     : "text-muted-foreground"
                 }`}
               >
-                {password.length}/10 chars min
+                {password.length}/6 chars min
               </span>
             </div>
             <div className="relative">
               <KeyRound className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 type="password"
-                placeholder="Minimum 10 characters"
+                placeholder="Minimum 6 characters"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => handlePasswordChange(e.target.value)}
+                onBlur={() =>
+                  setTouched((prev) => ({ ...prev, password: true }))
+                }
+                disabled={saving}
                 className="h-9 pl-8 text-xs font-mono"
                 required
               />
             </div>
+            {passwordError && (
+              <p className="text-[11px] text-destructive flex items-center gap-1 mt-1">
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                <span>{passwordError}</span>
+              </p>
+            )}
           </div>
 
           {/* Initial Role */}
@@ -736,6 +858,7 @@ function AddUserModal({
               <button
                 type="button"
                 onClick={() => setRole("normal_user")}
+                disabled={saving}
                 className={`p-2.5 text-left rounded-lg border transition-colors ${
                   role === "normal_user"
                     ? "border-brand-blue bg-blue-50/50 ring-1 ring-brand-blue"
@@ -754,6 +877,7 @@ function AddUserModal({
               <button
                 type="button"
                 onClick={() => setRole("super_user")}
+                disabled={saving}
                 className={`p-2.5 text-left rounded-lg border transition-colors ${
                   role === "super_user"
                     ? "border-brand-blue bg-blue-50/50 ring-1 ring-brand-blue"
@@ -784,12 +908,17 @@ function AddUserModal({
             <Button
               type="submit"
               size="sm"
-              disabled={
-                saving || !isPasswordValid || !isEmailValid || !fullName.trim()
-              }
-              className="bg-brand-blue hover:bg-brand-blue/90 text-white"
+              disabled={!canSubmit}
+              className="bg-brand-blue hover:bg-brand-blue/90 text-white flex items-center gap-1.5"
             >
-              {saving ? "Creating User…" : "Create Staff Account"}
+              {saving ? (
+                <>
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  Creating Staff Account…
+                </>
+              ) : (
+                "Create Staff Account"
+              )}
             </Button>
           </div>
         </form>
