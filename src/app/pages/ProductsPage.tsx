@@ -349,7 +349,7 @@ export default function ProductsPage() {
                             </span>
                             {p.gauge && (
                               <span className="inline-flex items-center rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold text-foreground border border-border">
-                                SWG {p.gauge}
+                                Gauge {p.gauge}
                               </span>
                             )}
                             <span
@@ -476,7 +476,7 @@ export default function ProductsPage() {
                       <th className="py-2.5 pr-4 font-medium">Code</th>
                       <th className="py-2.5 pr-4 font-medium">Name</th>
                       <th className="py-2.5 pr-4 font-medium">Category</th>
-                      <th className="py-2.5 pr-4 font-medium">Gauge (SWG)</th>
+                      <th className="py-2.5 pr-4 font-medium">Gauge</th>
                       <th className="py-2.5 pr-4 font-medium">Base Unit</th>
                       <th className="py-2.5 pr-4 font-medium">Tracking</th>
                       <th className="py-2.5 pr-4 font-medium">Specifications</th>
@@ -518,11 +518,11 @@ export default function ProductsPage() {
                                 className="inline-flex items-center gap-1 rounded bg-slate-100 dark:bg-slate-800 px-2 py-0.5 font-semibold text-foreground border border-border"
                                 title={
                                   p.swg
-                                    ? `SWG ${p.gauge}: ${p.swg.diameter_mm} mm (${p.swg.diameter_inch} in)`
-                                    : `SWG ${p.gauge}`
+                                    ? `Gauge ${p.gauge}: ${p.swg.diameter_mm} mm (${p.swg.diameter_inch} in)`
+                                    : `Gauge ${p.gauge}`
                                 }
                               >
-                                SWG {p.gauge}
+                                {p.gauge}
                               </span>
                             ) : (
                               <span className="text-muted-foreground">—</span>
@@ -698,8 +698,19 @@ function ProductFormModal({
     product?.category_id ?? categories[0]?.id ?? "",
   );
   const [description, setDescription] = useState(product?.description ?? "");
+  const sheetsUom = useMemo(
+    () =>
+      uoms.find(
+        (u) =>
+          u.name.toLowerCase() === "sheets" ||
+          u.code.toLowerCase() === "sheet" ||
+          u.code.toLowerCase() === "sheets",
+      ),
+    [uoms],
+  );
+
   const [baseUomId, setBaseUomId] = useState(
-    product?.base_uom_id ?? uoms[0]?.id ?? "",
+    product?.base_uom_id ?? sheetsUom?.id ?? uoms[0]?.id ?? "",
   );
   const [trackingMode, setTrackingMode] = useState<ProductTrackingMode>(
     product?.tracking_mode ?? "aggregate",
@@ -1123,7 +1134,7 @@ function ProductFormModal({
 
             <div className="grid gap-1.5">
               <div className="flex items-center justify-between">
-                <Label htmlFor="prod-gauge">Wire Gauge (SWG)</Label>
+                <Label htmlFor="prod-gauge">Gauge</Label>
                 {gauge && (
                   <button
                     type="button"
@@ -1145,7 +1156,7 @@ function ProductFormModal({
                 <option value="">— Optional —</option>
                 {swgList.map((s) => (
                   <option key={s.id} value={s.gauge}>
-                    SWG {s.gauge} ({s.diameter_mm} mm)
+                    {s.gauge} ({s.diameter_mm} mm)
                   </option>
                 ))}
               </select>
@@ -1155,10 +1166,10 @@ function ProductFormModal({
                     const found = swgList.find((s) => s.gauge === gauge);
                     return found
                       ? `Ø ${found.diameter_mm} mm (${found.diameter_inch} in)`
-                      : `SWG ${gauge}`;
+                      : `${gauge}`;
                   })()
                 ) : (
-                  "Wire gauge lookup scale."
+                  "Gauge lookup scale."
                 )}
               </p>
             </div>
@@ -1552,10 +1563,10 @@ function ProductDetailsModal({
 
           <div className="grid grid-cols-2 gap-4 pb-3 border-b">
             <div>
-              <p className="text-xs text-muted-foreground">Standard Wire Gauge</p>
+              <p className="text-xs text-muted-foreground">Gauge</p>
               <p className="font-mono font-medium">
                 {product.gauge ? (
-                  <span className="font-bold text-foreground">SWG {product.gauge}</span>
+                  <span className="font-bold text-foreground">Gauge {product.gauge}</span>
                 ) : (
                   <span className="text-muted-foreground">—</span>
                 )}

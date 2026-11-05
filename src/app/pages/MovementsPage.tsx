@@ -1213,7 +1213,7 @@ function AddStockModal({
     }
     if (selectedProduct?.tracking_mode === "roll" && !rollLabel.trim()) {
       setModalError(
-        "Roll / bundle label is mandatory for roll-tracked products.",
+        "Roll label is mandatory for roll-tracked products.",
       );
       return;
     }
@@ -1347,7 +1347,7 @@ function AddStockModal({
                 <div className="space-y-1.5 rounded-lg border border-purple-200 bg-purple-50/50 p-3">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-semibold text-purple-900">
-                      Roll / Bundle Label{" "}
+                      Roll Label{" "}
                       <span className="text-destructive">*</span>
                     </Label>
                     <span className="text-[10px] text-purple-700 font-mono">
@@ -1355,7 +1355,7 @@ function AddStockModal({
                     </span>
                   </div>
                   <Input
-                    placeholder="e.g. ROLL-2026-001 or BUNDLE-A"
+                    placeholder="e.g. ROLL-2026-001"
                     value={rollLabel}
                     onChange={(e) => setRollLabel(e.target.value)}
                     className="h-8 text-xs bg-white"

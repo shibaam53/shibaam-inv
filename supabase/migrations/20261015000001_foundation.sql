@@ -119,7 +119,7 @@ insert into public.uoms (code, name, dimension) values
   ('sqft',   'Square feet',   'area'),
   ('pcs',    'Piece',         'count'),
   ('roll',   'Roll',          'count'),
-  ('bundle', 'Bundle',        'count')
+  ('sheet', 'Sheet',        'count')
 on conflict (code) do nothing;
 
 -- --------------------------------------------------------------- products ---

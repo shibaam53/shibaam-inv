@@ -43,7 +43,7 @@ export default function SettingsPage() {
         </h1>
         <p className="text-sm text-muted-foreground">
           Manage product categories, units of measure, conversion rules, and
-          Standard Wire Gauge (SWG) lookup reference.
+          gauge lookup reference.
         </p>
       </div>
 
@@ -94,7 +94,7 @@ export default function SettingsPage() {
           }`}
         >
           <Scale className="h-4 w-4" />
-          SWG Reference Scale
+          Gauge Reference Scale
         </button>
       </div>
 
@@ -486,7 +486,7 @@ function UomsSection() {
                 <option value="weight">Weight (e.g. kg, g)</option>
                 <option value="area">Area (e.g. sqm, sqft)</option>
                 <option value="count">
-                  Count / Packaging (e.g. roll, pcs, bundle)
+                  Count / Packaging (e.g. roll, pcs, sheets)
                 </option>
                 <option value="other">Other</option>
               </select>
@@ -650,7 +650,7 @@ function SwgSection() {
   };
 
   const handleDeleteSwg = async (id: string, g: string) => {
-    if (!confirm(`Remove SWG ${g} from reference table?`)) return;
+    if (!confirm(`Remove gauge ${g} from reference table?`)) return;
 
     setError(null);
     startTransition(async () => {
@@ -682,7 +682,7 @@ function SwgSection() {
               <Search className="h-4 w-4" /> Quick Gauge Lookup
             </CardTitle>
             <CardDescription>
-              Instantly convert wire gauge to millimeter and inch diameters.
+              Instantly convert gauge to millimeter and inch diameters.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
@@ -705,7 +705,7 @@ function SwgSection() {
                         className="flex justify-between items-center border-b pb-1 last:border-0"
                       >
                         <span className="font-bold text-foreground">
-                          SWG {item.gauge}
+                          {item.gauge}
                         </span>
                         <span className="tabular-nums font-mono text-xs">
                           {item.diameter_mm} mm · {item.diameter_inch}&quot;
@@ -722,7 +722,7 @@ function SwgSection() {
         {/* Add Entry Card */}
         <Card>
           <CardHeader>
-            <CardTitle>Add SWG Gauge</CardTitle>
+            <CardTitle>Add Gauge</CardTitle>
             <CardDescription>
               Transcribe entries from the approved conversion table.
             </CardDescription>
@@ -788,16 +788,16 @@ function SwgSection() {
         </Card>
       </div>
 
-      {/* SWG Table Card */}
+      {/* Gauge Table Card */}
       <Card className="md:col-span-2">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>
-                SWG Conversion Table ({swgList.length} rows)
+                Gauge Reference Table ({swgList.length} rows)
               </CardTitle>
               <CardDescription>
-                Authoritative wire gauge lookup scale per SRS §21.6.
+                Authoritative gauge lookup scale per SRS §21.6.
               </CardDescription>
             </div>
             <Button
@@ -820,12 +820,12 @@ function SwgSection() {
 
           {loading ? (
             <p className="text-sm text-muted-foreground">
-              Loading SWG reference…
+              Loading gauge reference…
             </p>
           ) : swgList.length === 0 ? (
             <div className="rounded-lg border border-dashed p-6 text-center">
               <p className="text-sm text-muted-foreground">
-                No SWG rows transcribed yet.
+                No gauge rows transcribed yet.
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 Add gauge entries using the form on the left or paste the table
@@ -837,7 +837,7 @@ function SwgSection() {
               <table className="w-full text-left text-sm">
                 <thead className="sticky top-0 bg-card border-b text-muted-foreground">
                   <tr>
-                    <th className="py-2 pr-4 font-medium">Gauge (SWG)</th>
+                    <th className="py-2 pr-4 font-medium">Gauge</th>
                     <th className="py-2 pr-4 font-medium text-right">
                       Diameter (mm)
                     </th>
@@ -852,7 +852,7 @@ function SwgSection() {
                   {filtered.map((s) => (
                     <tr key={s.id} className="hover:bg-muted/40">
                       <td className="py-2 pr-4 font-bold text-foreground">
-                        SWG {s.gauge}
+                        {s.gauge}
                       </td>
                       <td className="py-2 pr-4 text-right font-mono tabular-nums">
                         {s.diameter_mm}
