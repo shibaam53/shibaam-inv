@@ -141,9 +141,25 @@ export function calculateDerivedLength(
  * If stock is 32 sqft with 4 ft Paano -> "4 ft × 8 ft".
  * Returns null if Paano is missing or invalid.
  */
+/**
+ * Formats physical dimensions for products with configured Height (Paano) as "Fixed Width ft × Remaining Length ft".
+ * - For sqft products: Remaining Length (ft) = Area (sqft) ÷ Fixed Width (ft)
+ * - For linear feet (ft): Remaining Length (ft) = Stock Quantity (ft)
+ * - For linear meters (m): Length converted from meters to feet
+ * - For square meters (sqm): Area converted to sqft, then divided by width
+ * - For linear in/mm: Converted to feet
+ * - For sheets: Uses spec length if explicitly configured
+ * - For weight (kg, g) or unconvertible discrete items: Returns null ("—")
+ *
+ * Example: 40 sqft with 4 ft Paano -> "4 ft × 10 ft".
+ * Linear 90 ft with 4 ft Paano -> "4 ft × 90 ft".
+ * Returns null if Paano is missing, zero, or if dimension cannot be reliably established.
+ */
 export function formatPhysicalSize(
   stockQty: Decimal | number | string | null | undefined,
   paanoInFeet: Decimal | number | string | null | undefined,
+  baseUomCode?: string | null,
+  specs?: Record<string, unknown> | null,
 ): string | null {
   if (stockQty == null || paanoInFeet == null || stockQty === "" || paanoInFeet === "") {
     return null;
@@ -154,8 +170,64 @@ export function formatPhysicalSize(
     const width = paanoInFeet instanceof Decimal ? paanoInFeet : new Decimal(paanoInFeet);
     if (width.isNegative() || width.isZero()) return null;
 
-    const length = stock.dividedBy(width);
-    return `${formatQty(width)} ft × ${formatQty(length)} ft`;
+    const uom = (baseUomCode || "sqft").trim().toLowerCase();
+
+    // 1. Square foot (Area)
+    if (uom === "sqft" || uom === "sq_ft" || uom === "sq.ft") {
+      const length = stock.dividedBy(width);
+      return `${formatQty(width)} ft × ${formatQty(length)} ft`;
+    }
+
+    // 2. Linear Feet
+    if (uom === "ft" || uom === "feet" || uom === "foot") {
+      return `${formatQty(width)} ft × ${formatQty(stock)} ft`;
+    }
+
+    // 3. Linear Meters
+    if (uom === "m" || uom === "meter" || uom === "meters") {
+      const lengthInFeet = stock.dividedBy("0.3048");
+      return `${formatQty(width)} ft × ${formatQty(lengthInFeet)} ft`;
+    }
+
+    // 4. Square Meters (Area)
+    if (uom === "sqm" || uom === "m2" || uom === "sq_m" || uom === "sq.m") {
+      const areaInSqft = stock.dividedBy("0.3048").dividedBy("0.3048");
+      const length = areaInSqft.dividedBy(width);
+      return `${formatQty(width)} ft × ${formatQty(length)} ft`;
+    }
+
+    // 5. Linear Inches
+    if (uom === "in" || uom === "inch" || uom === "inches") {
+      const lengthInFeet = stock.dividedBy(12);
+      return `${formatQty(width)} ft × ${formatQty(lengthInFeet)} ft`;
+    }
+
+    // 6. Linear Millimeters
+    if (uom === "mm" || uom === "millimeter" || uom === "millimeters") {
+      const lengthInFeet = stock.dividedBy("304.8");
+      return `${formatQty(width)} ft × ${formatQty(lengthInFeet)} ft`;
+    }
+
+    // 7. Sheet (if sheet length is configured in specs)
+    if (uom === "sheet" || uom === "sheets") {
+      if (specs && typeof specs === "object") {
+        const specLength =
+          specs.sheet_length_ft ??
+          specs.length_ft ??
+          specs.sheet_length ??
+          specs.length;
+        if (specLength != null && specLength !== "") {
+          const l = new Decimal(String(specLength));
+          if (l.isPositive() && !l.isZero()) {
+            return `${formatQty(width)} ft × ${formatQty(l)} ft`;
+          }
+        }
+      }
+      return null;
+    }
+
+    // 8. Weight (kg, g) and discrete/unconvertible counts (pcs, roll, bundle)
+    return null;
   } catch {
     return null;
   }

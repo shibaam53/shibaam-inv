@@ -102,10 +102,29 @@ describe("calculateDerivedLength", () => {
 });
 
 describe("formatPhysicalSize", () => {
-  it("formats physical dimensions as 'Fixed Width ft × Remaining Length ft'", () => {
-    expect(formatPhysicalSize(40, 4)).toBe("4 ft × 10 ft");
-    expect(formatPhysicalSize(32, 4)).toBe("4 ft × 8 ft");
-    expect(formatPhysicalSize(48, 4)).toBe("4 ft × 12 ft");
+  it("formats physical dimensions as 'Fixed Width ft × Remaining Length ft' for sqft", () => {
+    expect(formatPhysicalSize(40, 4, "sqft")).toBe("4 ft × 10 ft");
+    expect(formatPhysicalSize(32, 4, "sqft")).toBe("4 ft × 8 ft");
+    expect(formatPhysicalSize(48, 4, "sqft")).toBe("4 ft × 12 ft");
+  });
+
+  it("handles linear feet (ft) directly using stock quantity as length", () => {
+    expect(formatPhysicalSize(90, 4, "ft")).toBe("4 ft × 90 ft");
+    expect(formatPhysicalSize("41.75", 4, "ft")).toBe("4 ft × 41.75 ft");
+  });
+
+  it("handles linear meters (m) converted to feet", () => {
+    expect(formatPhysicalSize(10, 4, "m")).toBe("4 ft × 32.808 ft");
+  });
+
+  it("handles sheets with spec length", () => {
+    expect(formatPhysicalSize(10, 4, "sheet", { length_ft: 8 })).toBe("4 ft × 8 ft");
+    expect(formatPhysicalSize(10, 4, "sheet")).toBeNull();
+  });
+
+  it("returns null for incompatible units like kg or pcs", () => {
+    expect(formatPhysicalSize(100, 4, "kg")).toBeNull();
+    expect(formatPhysicalSize(50, 4, "pcs")).toBeNull();
   });
 
   it("handles decimals without premature truncation", () => {
