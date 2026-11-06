@@ -14,6 +14,8 @@ from (
   values
     ('ft',   'm',    0.3048::numeric,                 'ISO standard: 1 ft = 0.3048 m',      'Feet to base meters'),
     ('m',    'ft',   3.28083989501312335958::numeric, 'Exact 1 / 0.3048',                   'Meters to base feet'),
+    ('ft',   'in',   12::numeric,                     'Imperial standard: 1 ft = 12 in',    'Feet to base inches'),
+    ('in',   'ft',   0.08333333333333333333::numeric, 'Exact 1 / 12',                       'Inches to base feet'),
     ('in',   'mm',   25.4::numeric,                   'ISO standard: 1 in = 25.4 mm',       'Inches to base millimeters'),
     ('mm',   'in',   0.03937007874015748031::numeric, 'Exact 1 / 25.4',                     'Millimeters to base inches'),
     ('mm',   'm',    0.001::numeric,                  'Metric standard: 1 mm = 0.001 m',    'Millimeters to base meters'),
