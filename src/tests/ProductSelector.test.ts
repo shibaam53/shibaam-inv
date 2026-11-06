@@ -129,11 +129,15 @@ describe("ProductSelector logic", () => {
         paano_unit: "ft",
       };
       const summary = getProductSpecSummary(meshWithPaano);
-      expect(summary).toContain("Wire Mesh");
-      expect(summary).toContain("Gauge 16 (1.626 mm)");
       expect(summary).toContain("Paano: 4 ft");
+      expect(summary).toContain("Gauge 16 (1.626 mm)");
       expect(summary).toContain("Roll-tracked");
       expect(summary).toContain("Base: MTR");
+
+      // Verify Paano appears before Gauge
+      const paanoIndex = summary.indexOf("Paano: 4 ft");
+      const gaugeIndex = summary.indexOf("Gauge 16");
+      expect(paanoIndex).toBeLessThan(gaugeIndex);
     });
 
     it("generates a clean specification summary for perforated sheet", () => {

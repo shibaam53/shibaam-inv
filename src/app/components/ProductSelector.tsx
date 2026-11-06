@@ -77,16 +77,16 @@ export function getProductSpecSummary(p: ProductItem): string {
     parts.push(`Pitch ${p.perforation.pitch_mm}mm`);
   }
 
+  if (p.paano_value != null && p.paano_unit) {
+    parts.push(`Paano: ${p.paano_value} ${p.paano_unit}`);
+  }
+
   if (p.gauge) {
     if (p.swg?.diameter_mm) {
       parts.push(`Gauge ${p.gauge} (${p.swg.diameter_mm} mm)`);
     } else {
       parts.push(`Gauge ${p.gauge}`);
     }
-  }
-
-  if (p.paano_value != null && p.paano_unit) {
-    parts.push(`Paano: ${p.paano_value} ${p.paano_unit}`);
   }
 
   if (p.description) {
@@ -542,6 +542,22 @@ export function ProductSelector({
               </span>
             </div>
 
+            {/* Height (Paano) (if populated) */}
+            {selectedProduct.paano_value != null && selectedProduct.paano_unit && (
+              <div>
+                <span className="text-muted-foreground block text-[10px] uppercase tracking-wider font-semibold">
+                  Height (Paano)
+                </span>
+                <span className="font-medium text-foreground">
+                  {formatPaano(
+                    selectedProduct.paano_value,
+                    selectedProduct.paano_unit,
+                    selectedProduct.paano_in_feet,
+                  )}
+                </span>
+              </div>
+            )}
+
             {/* Gauge (if populated) */}
             {selectedProduct.gauge && (
               <div>
@@ -580,22 +596,6 @@ export function ProductSelector({
                 </span>
                 <span className="font-mono font-bold text-brand-blue">
                   {selectedProduct.perforation.pitch_mm} mm
-                </span>
-              </div>
-            )}
-
-            {/* Height (Paano) (if populated) */}
-            {selectedProduct.paano_value != null && selectedProduct.paano_unit && (
-              <div>
-                <span className="text-muted-foreground block text-[10px] uppercase tracking-wider font-semibold">
-                  Height (Paano)
-                </span>
-                <span className="font-medium text-foreground">
-                  {formatPaano(
-                    selectedProduct.paano_value,
-                    selectedProduct.paano_unit,
-                    selectedProduct.paano_in_feet,
-                  )}
                 </span>
               </div>
             )}
