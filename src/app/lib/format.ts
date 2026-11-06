@@ -5,7 +5,10 @@ import Decimal from "decimal.js";
  * step of rendering a value on screen. The rounded text is never stored, reused in a
  * calculation or sent to the database.
  */
-export function formatQty(value: string | number | null | undefined, maxDecimals = 3): string {
+export function formatQty(
+  value: string | number | Decimal | null | undefined,
+  maxDecimals = 3,
+): string {
   if (value === null || value === undefined || value === "") return "—";
   try {
     return new Decimal(value).toDecimalPlaces(maxDecimals, Decimal.ROUND_HALF_UP).toFixed();
@@ -79,4 +82,102 @@ export function getProductStockBalance(
     return Number((sb as { quantity: unknown }).quantity) || 0;
   }
   return 0;
+}
+
+/**
+ * Authoritatively converts Paano (fixed width) into standard feet (ft) using Decimal.js.
+ * Supported units: ft, in (1 ft = 12 in), m (1 ft = 0.3048 m), mm (1 ft = 304.8 mm).
+ */
+export function convertPaanoToFeet(
+  value: number | string | Decimal,
+  unit: string,
+): Decimal {
+  const d = new Decimal(value);
+  if (d.isNegative() || d.isZero()) return new Decimal(0);
+
+  const cleanUnit = unit.trim().toLowerCase();
+  switch (cleanUnit) {
+    case "ft":
+    case "feet":
+      return d;
+    case "in":
+    case "inch":
+    case "inches":
+      return d.dividedBy(12);
+    case "m":
+    case "meter":
+    case "meters":
+      return d.dividedBy("0.3048");
+    case "mm":
+    case "millimeter":
+    case "millimeters":
+      return d.dividedBy("304.8");
+    default:
+      return d;
+  }
+}
+
+/**
+ * Calculates remaining physical length in feet from stock in square feet and fixed width in feet:
+ * Length (ft) = Area (sqft) ÷ Fixed Width (ft)
+ */
+export function calculateDerivedLength(
+  stockQty: number | string | Decimal,
+  paanoInFeet: number | string | Decimal,
+): Decimal | null {
+  try {
+    const stock = new Decimal(stockQty);
+    const width = new Decimal(paanoInFeet);
+    if (width.isNegative() || width.isZero()) return null;
+    return stock.dividedBy(width);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Formats physical dimensions for sqft products as "Fixed Width ft × Remaining Length ft".
+ * Example: 40 sqft with 4 ft Paano -> "4 ft × 10 ft".
+ * If stock is 32 sqft with 4 ft Paano -> "4 ft × 8 ft".
+ * Returns null if Paano is missing or invalid.
+ */
+export function formatPhysicalSize(
+  stockQty: Decimal | number | string | null | undefined,
+  paanoInFeet: Decimal | number | string | null | undefined,
+): string | null {
+  if (stockQty == null || paanoInFeet == null || stockQty === "" || paanoInFeet === "") {
+    return null;
+  }
+
+  try {
+    const stock = stockQty instanceof Decimal ? stockQty : new Decimal(stockQty);
+    const width = paanoInFeet instanceof Decimal ? paanoInFeet : new Decimal(paanoInFeet);
+    if (width.isNegative() || width.isZero()) return null;
+
+    const length = stock.dividedBy(width);
+    return `${formatQty(width)} ft × ${formatQty(length)} ft`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Formats Height (Paano) for display, showing both entered value/unit and standard feet if entered in another unit.
+ * Example: 4 ft -> "4 ft", 48 in -> "48 in (4 ft)"
+ */
+export function formatPaano(
+  value: number | string | null | undefined,
+  unit: string | null | undefined,
+  inFeet?: number | string | null | undefined,
+): string {
+  if (value == null || value === "") return "—";
+  const u = (unit || "ft").trim();
+  const valStr = formatQty(value);
+
+  if (u.toLowerCase() === "ft" || inFeet == null) {
+    return `${valStr} ${u}`;
+  }
+
+  const ftStr = formatQty(inFeet);
+  return `${valStr} ${u} (${ftStr} ft)`;
 }

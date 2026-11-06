@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatQty } from "@/app/lib/format";
+import { formatQty, formatPhysicalSize } from "@/app/lib/format";
 import { useInventory } from "@/app/lib/useInventory";
 
 const STATUS_LABEL = {
@@ -80,6 +80,7 @@ export default function InventoryPage() {
                   <th className="py-2 pr-4 font-medium">Name</th>
                   <th className="py-2 pr-4 font-medium">Category</th>
                   <th className="py-2 pr-4 text-right font-medium">Stock</th>
+                  <th className="py-2 pr-4 font-medium">Size</th>
                   <th className="py-2 font-medium">Status</th>
                 </tr>
               </thead>
@@ -91,8 +92,13 @@ export default function InventoryPage() {
                     <td className="py-2 pr-4 text-muted-foreground">
                       {r.category_name ?? "—"}
                     </td>
-                    <td className="py-2 pr-4 text-right tabular-nums">
+                    <td className="py-2 pr-4 text-right tabular-nums font-mono font-medium">
                       {formatQty(r.stock_qty ?? 0)} {r.base_uom_code ?? ""}
+                    </td>
+                    <td className="py-2 pr-4 text-xs font-mono text-muted-foreground whitespace-nowrap">
+                      {r.base_uom_code?.toLowerCase() === "sqft" && r.paano_in_feet != null
+                        ? (r.physical_size || formatPhysicalSize(r.stock_qty, r.paano_in_feet) || "—")
+                        : "—"}
                     </td>
                     <td className="py-2">
                       {(() => {

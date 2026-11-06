@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Search, X, Check, Sliders, ChevronDown } from "lucide-react";
 import { Label } from "@/components/ui/label";
-import { formatQty } from "@/app/lib/format";
+import { formatQty, formatPhysicalSize, formatPaano } from "@/app/lib/format";
 import type { Database } from "@/types/database";
 
 export type ProductTrackingMode = Database["public"]["Enums"]["tracking_mode"];
@@ -15,6 +15,9 @@ export type ProductItem = {
   status: Database["public"]["Enums"]["product_status"];
   description?: string | null;
   gauge?: string | null;
+  paano_value?: number | null;
+  paano_unit?: string | null;
+  paano_in_feet?: number | null;
   specs?: Record<string, unknown> | null;
   category?: {
     id: string;
@@ -82,6 +85,10 @@ export function getProductSpecSummary(p: ProductItem): string {
     }
   }
 
+  if (p.paano_value != null && p.paano_unit) {
+    parts.push(`Paano: ${p.paano_value} ${p.paano_unit}`);
+  }
+
   if (p.description) {
     const desc = p.description.trim();
     // Check if desc isn't just duplicating what we already have
@@ -140,6 +147,12 @@ export function matchesProduct(p: ProductItem, query: string): boolean {
       : "",
     p.perforation?.pitch_mm
       ? `${p.perforation.pitch_mm}mm ${p.perforation.pitch_mm} mm pitch`
+      : "",
+    p.paano_value != null && p.paano_unit
+      ? `${p.paano_value}${p.paano_unit} ${p.paano_value} ${p.paano_unit} paano width height`
+      : "",
+    p.paano_in_feet != null
+      ? `${p.paano_in_feet}ft ${p.paano_in_feet} ft`
       : "",
     p.base_uom?.code || "",
     p.base_uom?.name || "",
@@ -318,7 +331,10 @@ export function ProductSelector({
       : getProductStockBalance(selectedProduct);
 
   return (
-    <div ref={containerRef} className={`space-y-2 ${className}`}>
+    <div
+      ref={containerRef}
+      className={`space-y-2 relative ${isOpen ? "z-40" : "z-auto"} ${className}`}
+    >
       {/* Label */}
       <div className="flex items-center justify-between">
         <Label className="text-xs font-semibold text-foreground">
@@ -567,6 +583,38 @@ export function ProductSelector({
                 </span>
               </div>
             )}
+
+            {/* Height (Paano) (if populated) */}
+            {selectedProduct.paano_value != null && selectedProduct.paano_unit && (
+              <div>
+                <span className="text-muted-foreground block text-[10px] uppercase tracking-wider font-semibold">
+                  Height (Paano)
+                </span>
+                <span className="font-medium text-foreground">
+                  {formatPaano(
+                    selectedProduct.paano_value,
+                    selectedProduct.paano_unit,
+                    selectedProduct.paano_in_feet,
+                  )}
+                </span>
+              </div>
+            )}
+
+            {/* Physical Size (for sqft products with Paano) */}
+            {selectedProduct.base_uom?.code === "sqft" &&
+              selectedProduct.paano_in_feet != null && (
+                <div>
+                  <span className="text-muted-foreground block text-[10px] uppercase tracking-wider font-semibold">
+                    Physical Size
+                  </span>
+                  <span className="font-mono font-bold text-brand-blue">
+                    {formatPhysicalSize(
+                      currentStock,
+                      selectedProduct.paano_in_feet,
+                    ) ?? "—"}
+                  </span>
+                </div>
+              )}
 
             {/* Extra Populated JSONB Specs (if any) */}
             {selectedProduct.specs &&

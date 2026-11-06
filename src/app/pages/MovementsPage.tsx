@@ -25,6 +25,8 @@ import {
   formatQty,
   formatDateTime,
   compoundFeetInchesToDecimal,
+  formatPhysicalSize,
+  formatPaano,
 } from "@/app/lib/format";
 import { useAuth } from "@/app/lib/auth";
 import type { Database } from "@/types/database";
@@ -68,6 +70,9 @@ export type MovementRow = {
     name: string;
     base_uom_id: string;
     tracking_mode: ProductTrackingMode;
+    paano_value?: number | null;
+    paano_unit?: string | null;
+    paano_in_feet?: number | null;
     base_uom?: {
       id: string;
       code: string;
@@ -144,7 +149,7 @@ export default function MovementsPage() {
           .select(
             `
             *,
-            product:products(id, code, name, base_uom_id, tracking_mode, base_uom:uoms!products_base_uom_id_fkey(id, code, name)),
+            product:products(id, code, name, base_uom_id, tracking_mode, paano_value, paano_unit, paano_in_feet, base_uom:uoms!products_base_uom_id_fkey(id, code, name)),
             entered_uom:uoms!stock_movements_entered_uom_id_fkey(id, code, name),
             creator:profiles!stock_movements_created_by_fkey(id, full_name),
             roll:stock_rolls!stock_movements_roll_id_fkey(id, label, initial_qty, remaining_qty, status)
@@ -1275,6 +1280,11 @@ function AddStockModal({
         )}
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          <div className="rounded-lg bg-emerald-50 p-3 text-xs text-emerald-900 border border-emerald-200">
+            Record inward stock received into inventory. Increases on-hand
+            stock, converted to Base UOM and committed to the immutable ledger.
+          </div>
+
           {/* Product selector */}
           <ProductSelector
             products={products}
@@ -1430,6 +1440,46 @@ function AddStockModal({
                   </div>
                 )}
 
+              {/* Resulting Physical Size for sqft products with Paano */}
+              {selectedProduct.base_uom?.code === "sqft" &&
+                selectedProduct.paano_in_feet != null &&
+                enteredQty && (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-2.5 text-xs text-emerald-950 flex flex-wrap items-center justify-between gap-1">
+                    <div>
+                      <span className="text-emerald-700 font-medium">
+                        Resulting Physical Size:
+                      </span>{" "}
+                      <strong className="font-mono text-emerald-900">
+                        {(() => {
+                          try {
+                            const cur = new Decimal(
+                              getProductStockBalance(selectedProduct) || 0,
+                            );
+                            const add = new Decimal(
+                              uomId === selectedProduct.base_uom_id
+                                ? enteredQty
+                                : convertedBasePreview ?? "0",
+                            );
+                            const total = cur.plus(add);
+                            return (
+                              formatPhysicalSize(
+                                total,
+                                selectedProduct.paano_in_feet,
+                              ) ?? "—"
+                            );
+                          } catch {
+                            return "—";
+                          }
+                        })()}
+                      </strong>
+                    </div>
+                    <span className="text-[10px] text-emerald-700 italic">
+                      Width {selectedProduct.paano_value}{" "}
+                      {selectedProduct.paano_unit}
+                    </span>
+                  </div>
+                )}
+
               {/* Segmented Bill Status (MANDATORY, NO DEFAULT) */}
               <BillStatusSelector
                 value={billStatus}
@@ -1453,7 +1503,7 @@ function AddStockModal({
           )}
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-2 pt-3 border-t">
+          <div className="flex items-center justify-end gap-2 pt-3 border-t relative z-10">
             <Button
               type="button"
               variant="outline"
@@ -1790,6 +1840,11 @@ function RemoveStockModal({
         )}
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          <div className="rounded-lg bg-blue-50 p-3 text-xs text-blue-900 border border-blue-200">
+            Record outward stock dispatch or customer delivery. Deducts from
+            available stock with commit-time verification against negative balances.
+          </div>
+
           {/* Product selector */}
           <ProductSelector
             products={products}
@@ -1980,6 +2035,26 @@ function RemoveStockModal({
                       </strong>
                     </div>
                   )}
+
+                  {/* Projected Remaining Physical Size for sqft products */}
+                  {!exceedsStock &&
+                    selectedProduct.base_uom?.code === "sqft" &&
+                    selectedProduct.paano_in_feet != null &&
+                    baseDeductionPreview && (
+                      <div className="flex items-center justify-between mt-1 pt-1 border-t text-[11px]">
+                        <span className="text-blue-700">
+                          Projected Remaining Size:
+                        </span>
+                        <strong className="font-mono text-brand-blue">
+                          {formatPhysicalSize(
+                            new Decimal(currentBalance).minus(
+                              baseDeductionPreview,
+                            ),
+                            selectedProduct.paano_in_feet,
+                          ) ?? "—"}
+                        </strong>
+                      </div>
+                    )}
                 </div>
               )}
 
@@ -2006,7 +2081,7 @@ function RemoveStockModal({
           )}
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-2 pt-3 border-t">
+          <div className="flex items-center justify-end gap-2 pt-3 border-t relative z-10">
             <Button
               type="button"
               variant="outline"
@@ -2194,6 +2269,29 @@ function OpeningStockModal({
                   required
                 />
               </div>
+
+              {/* Initial Physical Size for sqft products */}
+              {selectedProduct.base_uom?.code === "sqft" &&
+                selectedProduct.paano_in_feet != null &&
+                enteredQty && (
+                  <div className="rounded-lg border border-purple-200 bg-purple-50/70 p-2.5 text-xs text-purple-950 flex flex-wrap items-center justify-between gap-1">
+                    <div>
+                      <span className="text-purple-700 font-medium">
+                        Initial Physical Size:
+                      </span>{" "}
+                      <strong className="font-mono text-purple-950">
+                        {formatPhysicalSize(
+                          enteredQty,
+                          selectedProduct.paano_in_feet,
+                        ) ?? "—"}
+                      </strong>
+                    </div>
+                    <span className="text-[10px] text-purple-700 italic">
+                      Width {selectedProduct.paano_value}{" "}
+                      {selectedProduct.paano_unit}
+                    </span>
+                  </div>
+                )}
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold">
@@ -2475,6 +2573,44 @@ function CorrectionModal({
                   required
                 />
               </div>
+
+              {/* Resulting Physical Size for sqft products */}
+              {selectedProduct.base_uom?.code === "sqft" &&
+                selectedProduct.paano_in_feet != null &&
+                quantity && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-2.5 text-xs text-amber-950 flex flex-wrap items-center justify-between gap-1">
+                    <div>
+                      <span className="text-amber-800 font-medium">
+                        Resulting Physical Size:
+                      </span>{" "}
+                      <strong className="font-mono text-amber-950">
+                        {(() => {
+                          try {
+                            const cur = new Decimal(currentBalance || 0);
+                            const delta = new Decimal(quantity || 0);
+                            const resulting =
+                              direction === "increase"
+                                ? cur.plus(delta)
+                                : cur.minus(delta);
+                            if (resulting.isNegative()) return "— (Negative)";
+                            return (
+                              formatPhysicalSize(
+                                resulting,
+                                selectedProduct.paano_in_feet,
+                              ) ?? "—"
+                            );
+                          } catch {
+                            return "—";
+                          }
+                        })()}
+                      </strong>
+                    </div>
+                    <span className="text-[10px] text-amber-800 italic">
+                      Width {selectedProduct.paano_value}{" "}
+                      {selectedProduct.paano_unit}
+                    </span>
+                  </div>
+                )}
             </>
           )}
 
@@ -2750,6 +2886,19 @@ function MovementDetailModal({
                   {movement.product?.tracking_mode}
                 </strong>
               </div>
+              {movement.product?.paano_value != null &&
+                movement.product?.paano_unit && (
+                  <div>
+                    Height (Paano):{" "}
+                    <strong className="text-foreground">
+                      {formatPaano(
+                        movement.product.paano_value,
+                        movement.product.paano_unit,
+                        movement.product.paano_in_feet,
+                      )}
+                    </strong>
+                  </div>
+                )}
             </div>
           </div>
 
@@ -2791,6 +2940,18 @@ function MovementDetailModal({
                   {formatQty(movement.balance_after)} {baseCode}
                 </strong>
               </div>
+              {movement.product?.base_uom?.code === "sqft" &&
+                movement.product?.paano_in_feet != null && (
+                  <div className="col-span-2 pt-1 border-t flex items-center justify-between">
+                    <span>Resulting Physical Size:</span>
+                    <strong className="font-mono text-brand-blue">
+                      {formatPhysicalSize(
+                        movement.balance_after,
+                        movement.product.paano_in_feet,
+                      ) ?? "—"}
+                    </strong>
+                  </div>
+                )}
               {movement.conversion_factor &&
                 movement.conversion_factor !== 1 && (
                   <div className="col-span-2">

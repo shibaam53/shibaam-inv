@@ -24,7 +24,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/app/lib/supabase";
-import { formatQty, getProductStockBalance } from "@/app/lib/format";
+import {
+  formatQty,
+  getProductStockBalance,
+  convertPaanoToFeet,
+  formatPhysicalSize,
+  formatPaano,
+} from "@/app/lib/format";
 import { useFormErrorVisibility } from "@/app/lib/useFormErrorVisibility";
 import type { Database } from "@/types/database";
 
@@ -395,6 +401,11 @@ export default function ProductsPage() {
                           <div className="font-mono font-bold text-brand-blue text-sm mt-0.5">
                             {formatQty(stockQty)} {p.base_uom?.code}
                           </div>
+                          {p.base_uom?.code?.toLowerCase() === "sqft" && p.paano_in_feet != null && (
+                            <div className="text-[11px] font-mono text-muted-foreground">
+                              {formatPhysicalSize(stockQty, p.paano_in_feet) ?? "—"}
+                            </div>
+                          )}
                         </div>
                         <div>
                           <span className="text-muted-foreground text-[10px] uppercase font-semibold">
@@ -403,6 +414,11 @@ export default function ProductsPage() {
                           <div className="text-foreground font-medium text-xs mt-0.5">
                             {p.base_uom?.name} ({p.base_uom?.code})
                           </div>
+                          {p.paano_value != null && p.paano_unit && (
+                            <div className="text-[11px] text-muted-foreground mt-0.5">
+                              Paano: {p.paano_value} {p.paano_unit}
+                            </div>
+                          )}
                         </div>
                         {p.perforation && (
                           <div className="col-span-2 text-[11px] text-muted-foreground border-t pt-1.5 mt-0.5">
@@ -544,17 +560,32 @@ export default function ProductsPage() {
                             </span>
                           </td>
                           <td className="py-3 pr-4 text-xs">
-                            {p.perforation ? (
-                              <span className="inline-flex items-center gap-1 text-primary font-medium bg-primary/10 rounded px-1.5 py-0.5">
-                                Ø{p.perforation.hole_diameter_mm}mm · P=
-                                {p.perforation.pitch_mm}mm
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
+                            <div className="space-y-1">
+                              {p.perforation && (
+                                <span className="inline-flex items-center gap-1 text-primary font-medium bg-primary/10 rounded px-1.5 py-0.5">
+                                  Ø{p.perforation.hole_diameter_mm}mm · P=
+                                  {p.perforation.pitch_mm}mm
+                                </span>
+                              )}
+                              {p.paano_value != null && p.paano_unit && (
+                                <span className="inline-flex items-center gap-1 text-foreground font-medium bg-muted rounded px-1.5 py-0.5">
+                                  Paano: {p.paano_value} {p.paano_unit}
+                                </span>
+                              )}
+                              {!p.perforation && (p.paano_value == null || !p.paano_unit) && (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-3 pr-4 text-right tabular-nums font-mono">
-                            {formatQty(stockQty)} {p.base_uom?.code}
+                            <div className="font-bold text-foreground">
+                              {formatQty(stockQty)} {p.base_uom?.code}
+                            </div>
+                            {p.base_uom?.code?.toLowerCase() === "sqft" && p.paano_in_feet != null && (
+                              <div className="text-[11px] text-brand-blue font-medium">
+                                {formatPhysicalSize(stockQty, p.paano_in_feet) ?? "—"}
+                              </div>
+                            )}
                           </td>
                           <td className="py-3 pr-4">
                             <span
@@ -730,6 +761,27 @@ function ProductFormModal({
     product?.perforation?.pitch_mm ? String(product.perforation.pitch_mm) : "",
   );
 
+  // Paano (Fixed Width) state
+  const [paanoValue, setPaanoValue] = useState(
+    product?.paano_value != null ? String(product.paano_value) : "",
+  );
+  const [paanoUnit, setPaanoUnit] = useState<string>(
+    product?.paano_unit ?? "ft",
+  );
+
+  const selectedBaseUom = useMemo(
+    () => uoms.find((u) => u.id === baseUomId),
+    [uoms, baseUomId],
+  );
+  const isSqftBase = selectedBaseUom?.code?.toLowerCase() === "sqft";
+
+  const paanoInFeetVal = useMemo(() => {
+    if (!paanoValue.trim()) return null;
+    const num = Number(paanoValue.trim());
+    if (isNaN(num) || num <= 0) return null;
+    return convertPaanoToFeet(paanoValue.trim(), paanoUnit).toNumber();
+  }, [paanoValue, paanoUnit]);
+
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
@@ -826,6 +878,30 @@ function ProductFormModal({
       }
     }
 
+    // Paano dimension validation
+    const pVal = Number(paanoValue.trim());
+    if (isSqftBase) {
+      if (!paanoValue.trim() || isNaN(pVal) || pVal <= 0) {
+        return setError(
+          "Height (Paano) is mandatory and must be a positive number when Base Stock Unit is sqft.",
+        );
+      }
+      if (!paanoUnit.trim()) {
+        return setError("Please select a unit for Height (Paano).");
+      }
+    } else if (paanoValue.trim()) {
+      if (isNaN(pVal) || pVal <= 0) {
+        return setError("Height (Paano) must be a positive number if provided.");
+      }
+    }
+
+    const cleanPaanoValue = paanoValue.trim() && pVal > 0 ? pVal : null;
+    const cleanPaanoUnit = cleanPaanoValue ? paanoUnit : null;
+    const cleanPaanoInFeet =
+      cleanPaanoValue && cleanPaanoUnit
+        ? convertPaanoToFeet(cleanPaanoValue, cleanPaanoUnit).toNumber()
+        : null;
+
     startTransition(async () => {
       try {
         if (!isEditing) {
@@ -841,6 +917,9 @@ function ProductFormModal({
               tracking_mode: trackingMode,
               low_stock_threshold: Number(lowStockThreshold) || 0,
               gauge: gauge.trim() || null,
+              paano_value: cleanPaanoValue,
+              paano_unit: cleanPaanoUnit,
+              paano_in_feet: cleanPaanoInFeet,
               status: "active",
             })
             .select(
@@ -914,6 +993,9 @@ function ProductFormModal({
             updatePayload.code = cleanCode;
             updatePayload.base_uom_id = baseUomId;
             updatePayload.tracking_mode = trackingMode;
+            updatePayload.paano_value = cleanPaanoValue;
+            updatePayload.paano_unit = cleanPaanoUnit;
+            updatePayload.paano_in_feet = cleanPaanoInFeet;
           }
 
           const { data: updatedProd, error: updErr } = await supabase
@@ -1224,6 +1306,70 @@ function ProductFormModal({
                 Threshold in product base unit.
               </p>
             </div>
+
+            {/* Height (Paano) Dimension */}
+            <div className="grid gap-1.5 sm:col-span-2 rounded-lg border bg-surface/80 p-3">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="prod-paano" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  Height (Paano)
+                  {isSqftBase ? (
+                    <span className="text-destructive font-bold">*</span>
+                  ) : (
+                    <span className="text-muted-foreground text-[10px] font-normal">(optional)</span>
+                  )}
+                </Label>
+                {paanoValue && !hasMovements && (
+                  <button
+                    type="button"
+                    onClick={() => setPaanoValue("")}
+                    disabled={isPending}
+                    className="text-[10px] text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="prod-paano"
+                  type="number"
+                  step="any"
+                  min="0.000001"
+                  placeholder={isSqftBase ? "e.g. 4 or 48 (Required for sqft)" : "e.g. 4 or 48 (Optional)"}
+                  value={paanoValue}
+                  onChange={(e) => setPaanoValue(e.target.value)}
+                  disabled={isPending || hasMovements}
+                  className="flex-1 font-mono text-xs"
+                  required={isSqftBase}
+                />
+                <select
+                  value={paanoUnit}
+                  onChange={(e) => setPaanoUnit(e.target.value)}
+                  disabled={isPending || hasMovements}
+                  className="h-9 w-28 rounded-md border border-input bg-background px-2.5 text-xs font-semibold focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="ft">ft (Feet)</option>
+                  <option value="in">in (Inches)</option>
+                  <option value="m">m (Meters)</option>
+                  <option value="mm">mm (Millimeters)</option>
+                </select>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-1 text-[11px] text-muted-foreground pt-0.5">
+                <span>
+                  {isSqftBase ? (
+                    <strong className="text-brand-blue">Mandatory for sqft Base UOM.</strong>
+                  ) : (
+                    "Fixed width of product/material."
+                  )}{" "}
+                  Physical length and size will be calculated automatically as (Area ÷ Paano).
+                </span>
+                {paanoInFeetVal != null && (
+                  <span className="font-mono text-emerald-800 dark:text-emerald-300 font-semibold bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 text-[11px]">
+                    Internal Width: {formatQty(paanoInFeetVal)} ft
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Section: Permitted Secondary Units of Measure */}
@@ -1531,6 +1677,34 @@ function ProductDetailsModal({
                   : product.gauge
                     ? "Standard lookup"
                     : "—"}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 pb-3 border-b">
+            <div>
+              <p className="text-xs text-muted-foreground">Height (Paano)</p>
+              <p className="font-mono font-medium">
+                {product.paano_value != null && product.paano_unit ? (
+                  <span className="font-bold text-foreground">
+                    {formatPaano(
+                      product.paano_value,
+                      product.paano_unit,
+                      product.paano_in_feet,
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Physical Size</p>
+              <p className="font-mono font-bold text-brand-blue">
+                {product.base_uom?.code?.toLowerCase() === "sqft" &&
+                product.paano_in_feet != null
+                  ? formatPhysicalSize(stockQty, product.paano_in_feet) ?? "—"
+                  : "—"}
               </p>
             </div>
           </div>

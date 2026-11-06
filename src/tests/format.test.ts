@@ -3,6 +3,10 @@ import {
   compoundFeetInchesToDecimal,
   formatQty,
   getProductStockBalance,
+  convertPaanoToFeet,
+  calculateDerivedLength,
+  formatPhysicalSize,
+  formatPaano,
 } from "@/app/lib/format";
 
 describe("formatQty (display-only rounding)", () => {
@@ -59,6 +63,70 @@ describe("getProductStockBalance", () => {
   it("handles empty array or missing quantity", () => {
     expect(getProductStockBalance({ stock_balances: [] })).toBe(0);
     expect(getProductStockBalance({ stock_balances: null })).toBe(0);
+  });
+});
+
+describe("convertPaanoToFeet", () => {
+  it("keeps feet value unchanged", () => {
+    expect(convertPaanoToFeet(4, "ft").toNumber()).toBe(4);
+    expect(convertPaanoToFeet("2.5", "ft").toNumber()).toBe(2.5);
+  });
+
+  it("converts inches to feet by dividing by 12", () => {
+    expect(convertPaanoToFeet(48, "in").toNumber()).toBe(4);
+    expect(convertPaanoToFeet("24", "in").toNumber()).toBe(2);
+    expect(convertPaanoToFeet(36, "in").toNumber()).toBe(3);
+  });
+
+  it("handles zero or negative safely", () => {
+    expect(convertPaanoToFeet(0, "ft").toNumber()).toBe(0);
+    expect(convertPaanoToFeet(-5, "ft").toNumber()).toBe(0);
+  });
+});
+
+describe("calculateDerivedLength", () => {
+  it("calculates remaining length as stock / fixed width", () => {
+    expect(calculateDerivedLength(40, 4)?.toNumber()).toBe(10);
+    expect(calculateDerivedLength(32, 4)?.toNumber()).toBe(8);
+    expect(calculateDerivedLength(48, 4)?.toNumber()).toBe(12);
+  });
+
+  it("handles zero stock resulting in zero length", () => {
+    expect(calculateDerivedLength(0, 4)?.toNumber()).toBe(0);
+  });
+
+  it("returns null if width is missing or zero", () => {
+    expect(calculateDerivedLength(40, 0)).toBeNull();
+    expect(calculateDerivedLength(40, -4)).toBeNull();
+  });
+});
+
+describe("formatPhysicalSize", () => {
+  it("formats physical dimensions as 'Fixed Width ft × Remaining Length ft'", () => {
+    expect(formatPhysicalSize(40, 4)).toBe("4 ft × 10 ft");
+    expect(formatPhysicalSize(32, 4)).toBe("4 ft × 8 ft");
+    expect(formatPhysicalSize(48, 4)).toBe("4 ft × 12 ft");
+  });
+
+  it("handles decimals without premature truncation", () => {
+    expect(formatPhysicalSize(37.5, 2.5)).toBe("2.5 ft × 15 ft");
+  });
+
+  it("returns null for non-applicable or missing values", () => {
+    expect(formatPhysicalSize(null, 4)).toBeNull();
+    expect(formatPhysicalSize(40, null)).toBeNull();
+    expect(formatPhysicalSize(40, 0)).toBeNull();
+  });
+});
+
+describe("formatPaano", () => {
+  it("formats value with unit", () => {
+    expect(formatPaano(4, "ft")).toBe("4 ft");
+    expect(formatPaano(48, "in", 4)).toBe("48 in (4 ft)");
+  });
+
+  it("returns dash for missing value", () => {
+    expect(formatPaano(null, "ft")).toBe("—");
   });
 });
 

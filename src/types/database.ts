@@ -290,6 +290,9 @@ export type Database = {
           id: string
           low_stock_threshold: number
           name: string
+          paano_in_feet: number | null
+          paano_unit: string | null
+          paano_value: number | null
           specs: Json
           status: Database["public"]["Enums"]["product_status"]
           tracking_mode: Database["public"]["Enums"]["tracking_mode"]
@@ -305,6 +308,9 @@ export type Database = {
           id?: string
           low_stock_threshold?: number
           name: string
+          paano_in_feet?: number | null
+          paano_unit?: string | null
+          paano_value?: number | null
           specs?: Json
           status?: Database["public"]["Enums"]["product_status"]
           tracking_mode?: Database["public"]["Enums"]["tracking_mode"]
@@ -320,6 +326,9 @@ export type Database = {
           id?: string
           low_stock_threshold?: number
           name?: string
+          paano_in_feet?: number | null
+          paano_unit?: string | null
+          paano_value?: number | null
           specs?: Json
           status?: Database["public"]["Enums"]["product_status"]
           tracking_mode?: Database["public"]["Enums"]["tracking_mode"]
@@ -678,6 +687,10 @@ export type Database = {
           gauge: string | null
           low_stock_threshold: number | null
           name: string | null
+          paano_in_feet: number | null
+          paano_unit: string | null
+          paano_value: number | null
+          physical_size: string | null
           product_id: string | null
           status: Database["public"]["Enums"]["product_status"] | null
           stock_qty: number | null

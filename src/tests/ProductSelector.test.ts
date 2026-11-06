@@ -107,13 +107,31 @@ describe("ProductSelector logic", () => {
       expect(matchesProduct(mockPerfSheet, "1.6mm")).toBe(true);
       expect(matchesProduct(mockPerfSheet, "hole")).toBe(true);
     });
+
+    it("matches product by Height (Paano) dimensions", () => {
+      const sqftProduct: ProductItem = {
+        ...mockWireMesh,
+        paano_value: 4,
+        paano_unit: "ft",
+        paano_in_feet: 4,
+      };
+      expect(matchesProduct(sqftProduct, "4ft")).toBe(true);
+      expect(matchesProduct(sqftProduct, "4 ft")).toBe(true);
+      expect(matchesProduct(sqftProduct, "paano")).toBe(true);
+    });
   });
 
   describe("getProductSpecSummary", () => {
     it("generates a clean specification summary for wire mesh", () => {
-      const summary = getProductSpecSummary(mockWireMesh);
+      const meshWithPaano: ProductItem = {
+        ...mockWireMesh,
+        paano_value: 4,
+        paano_unit: "ft",
+      };
+      const summary = getProductSpecSummary(meshWithPaano);
       expect(summary).toContain("Wire Mesh");
       expect(summary).toContain("Gauge 16 (1.626 mm)");
+      expect(summary).toContain("Paano: 4 ft");
       expect(summary).toContain("Roll-tracked");
       expect(summary).toContain("Base: MTR");
     });
