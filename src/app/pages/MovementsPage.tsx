@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Plus,
   Minus,
@@ -138,6 +139,22 @@ export default function MovementsPage() {
 
   // Success message toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    const action = searchParams.get("action");
+    if (action === "add" || action === "remove") {
+      queueMicrotask(() => {
+        if (action === "add") {
+          setShowAddModal(true);
+        } else {
+          setShowRemoveModal(true);
+        }
+        setSearchParams({}, { replace: true });
+      });
+    }
+  }, [searchParams, setSearchParams]);
 
   const loadData = async () => {
     setLoading(true);
@@ -1503,7 +1520,7 @@ function AddStockModal({
           )}
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-2 pt-3 border-t relative z-10">
+          <div className="flex items-center justify-end gap-2 pt-3 border-t">
             <Button
               type="button"
               variant="outline"
@@ -2081,7 +2098,7 @@ function RemoveStockModal({
           )}
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-2 pt-3 border-t relative z-10">
+          <div className="flex items-center justify-end gap-2 pt-3 border-t">
             <Button
               type="button"
               variant="outline"

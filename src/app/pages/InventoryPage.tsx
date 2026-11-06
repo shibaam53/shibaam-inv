@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -19,6 +20,7 @@ import {
   AlertTriangle,
   Loader2,
   RefreshCw,
+  X,
 } from "lucide-react";
 import Decimal from "decimal.js";
 import { supabase } from "@/app/lib/supabase";
@@ -81,18 +83,35 @@ type ExpandedProductDetails = {
 
 export default function InventoryPage() {
   const state = useInventory();
-  const [query, setQuery] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const [query, setQuery] = useState(searchParams.get("search") || "");
+  const [statusFilter, setStatusFilter] = useState(
+    searchParams.get("status") || "all",
+  );
+
+  useEffect(() => {
+    const s = searchParams.get("search");
+    if (s != null) setQuery(s);
+    const st = searchParams.get("status");
+    if (st != null) setStatusFilter(st);
+  }, [searchParams]);
+
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [expandedData, setExpandedData] = useState<
     Record<string, ExpandedProductDetails>
   >({});
 
-  // Filter products based on search query across Code, Name, Category, Gauge, Tracking
+  // Filter products based on search query across Code, Name, Category, Gauge, Tracking, and status filter
   const rows = useMemo(() => {
     if (state.status !== "ready") return [];
+    let list = state.rows;
+    if (statusFilter !== "all") {
+      list = list.filter((r) => r.stock_status === statusFilter);
+    }
     const q = query.trim().toLowerCase();
-    if (!q) return state.rows;
-    return state.rows.filter((r) =>
+    if (!q) return list;
+    return list.filter((r) =>
       [
         r.code ?? "",
         r.name ?? "",
@@ -103,7 +122,7 @@ export default function InventoryPage() {
         r.tracking_mode ?? "",
       ].some((v) => v.toLowerCase().includes(q)),
     );
-  }, [state, query]);
+  }, [state, query, statusFilter]);
 
   // Load details on-demand when a product row is expanded
   const loadProductDetails = async (
@@ -225,22 +244,53 @@ export default function InventoryPage() {
 
       <CardContent className="grid gap-4 min-w-0">
         {/* Search bar */}
-        <div className="flex items-center gap-2 max-w-md relative">
-          <Search className="absolute left-3 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input
-            id="search"
-            placeholder="Search by code, name, category, gauge, tracking…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="pl-9 text-xs"
-          />
-          {query && (
-            <button
-              onClick={() => setQuery("")}
-              className="absolute right-2.5 text-xs text-muted-foreground hover:text-foreground"
-            >
-              Clear
-            </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 max-w-md w-full relative">
+            <Search className="absolute left-3 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              id="search"
+              placeholder="Search by code, name, category, gauge, tracking…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="pl-9 text-xs"
+            />
+            {query && (
+              <button
+                onClick={() => setQuery("")}
+                className="absolute right-2.5 text-xs text-muted-foreground hover:text-foreground"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          {statusFilter !== "all" && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 text-amber-900 border border-amber-300 px-2.5 py-1 text-xs font-medium">
+              <span>
+                Status:{" "}
+                <strong className="capitalize">
+                  {statusFilter.replace(/_/g, " ")}
+                </strong>
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusFilter("all");
+                  setSearchParams(
+                    (prev) => {
+                      const next = new URLSearchParams(prev);
+                      next.delete("status");
+                      return next;
+                    },
+                    { replace: true },
+                  );
+                }}
+                className="hover:text-amber-700"
+                title="Clear filter"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </span>
           )}
         </div>
 
