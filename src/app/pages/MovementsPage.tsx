@@ -28,6 +28,7 @@ import {
   compoundFeetInchesToDecimal,
   formatPhysicalSize,
   formatPaano,
+  convertPaanoDimension,
 } from "@/app/lib/format";
 import { useAuth } from "@/app/lib/auth";
 import type { Database } from "@/types/database";
@@ -1159,6 +1160,27 @@ function AddStockModal({
     );
   }, [conversionRules, selectedProduct, uomId]);
 
+  // Dynamic Paano-based dimensional conversion if no static rule exists
+  const paanoConversionPreview = useMemo(() => {
+    if (!enteredQty || !selectedProduct || !uomId) return null;
+    if (uomId === selectedProduct.base_uom_id) return null;
+    if (selectedUomPermitted?.requiresMeasurement) return null;
+    if (activeConversion) return null;
+    return convertPaanoDimension(
+      enteredQty,
+      selectedUomObj?.code,
+      selectedProduct.base_uom?.code,
+      selectedProduct.paano_in_feet,
+    );
+  }, [
+    enteredQty,
+    selectedProduct,
+    uomId,
+    selectedUomPermitted,
+    activeConversion,
+    selectedUomObj,
+  ]);
+
   // Live conversion preview (client-side Decimal preview, labelled "preview")
   const convertedBasePreview = useMemo(() => {
     if (!enteredQty || !selectedProduct) return null;
@@ -1175,6 +1197,9 @@ function AddStockModal({
       if (activeConversion?.factor) {
         return q.times(new Decimal(activeConversion.factor)).toString();
       }
+      if (paanoConversionPreview) {
+        return paanoConversionPreview.toString();
+      }
       return null;
     } catch {
       return null;
@@ -1186,6 +1211,7 @@ function AddStockModal({
     selectedUomPermitted,
     measuredBaseQty,
     activeConversion,
+    paanoConversionPreview,
   ]);
 
   const isFeetUom = useMemo(() => {
@@ -1359,16 +1385,31 @@ function AddStockModal({
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   required
                 >
-                  {permittedUoms.map((p) => (
-                    <option key={p.uom.id} value={p.uom.id}>
-                      {p.uom.name} ({p.uom.code})
-                      {p.isBase
-                        ? " [Base Unit]"
-                        : p.requiresMeasurement
-                          ? " [Requires Measurement]"
-                          : " [Conversion Rule]"}
-                    </option>
-                  ))}
+                  {permittedUoms.map((p) => {
+                    const isPaanoUnit =
+                      !p.isBase &&
+                      !p.requiresMeasurement &&
+                      selectedProduct?.paano_in_feet != null &&
+                      convertPaanoDimension(
+                        "1",
+                        p.uom.code,
+                        selectedProduct.base_uom?.code,
+                        selectedProduct.paano_in_feet,
+                      ) !== null;
+
+                    return (
+                      <option key={p.uom.id} value={p.uom.id}>
+                        {p.uom.name} ({p.uom.code})
+                        {p.isBase
+                          ? " [Base Unit]"
+                          : p.requiresMeasurement
+                            ? " [Requires Measurement]"
+                            : isPaanoUnit
+                              ? " [Paano Dimension]"
+                              : " [Conversion Rule]"}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -1441,24 +1482,33 @@ function AddStockModal({
               {/* Live Preview */}
               {convertedBasePreview &&
                 uomId !== selectedProduct.base_uom_id && (
-                  <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-2.5 text-xs text-emerald-900 flex items-center justify-between">
-                    <div>
-                      <span className="text-emerald-700 font-medium">
-                        Authoritative Base Quantity:
-                      </span>{" "}
-                      <strong className="font-mono text-emerald-950">
-                        {formatQty(convertedBasePreview)}{" "}
-                        {selectedProduct.base_uom?.code}
-                      </strong>
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-2.5 text-xs text-emerald-900 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-emerald-700 font-medium">
+                          Authoritative Base Quantity:
+                        </span>{" "}
+                        <strong className="font-mono text-emerald-950">
+                          {formatQty(convertedBasePreview)}{" "}
+                          {selectedProduct.base_uom?.code}
+                        </strong>
+                      </div>
+                      <span className="text-[10px] text-emerald-700 italic">
+                        Preview (RPC computes)
+                      </span>
                     </div>
-                    <span className="text-[10px] text-emerald-700 italic">
-                      Preview (RPC computes)
-                    </span>
+                    {paanoConversionPreview && (
+                      <div className="text-[10px] text-emerald-700">
+                        Converted using Height (Paano): {selectedProduct.paano_value}{" "}
+                        {selectedProduct.paano_unit}
+                      </div>
+                    )}
                   </div>
                 )}
 
-              {/* Resulting Physical Size for sqft products with Paano */}
-              {selectedProduct.base_uom?.code === "sqft" &&
+              {/* Resulting Physical Size for sqft or ft products with Paano */}
+              {(selectedProduct.base_uom?.code === "sqft" ||
+                selectedProduct.base_uom?.code === "ft") &&
                 selectedProduct.paano_in_feet != null &&
                 enteredQty && (
                   <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-2.5 text-xs text-emerald-950 flex flex-wrap items-center justify-between gap-1">
@@ -1482,6 +1532,7 @@ function AddStockModal({
                               formatPhysicalSize(
                                 total,
                                 selectedProduct.paano_in_feet,
+                                selectedProduct.base_uom?.code,
                               ) ?? "—"
                             );
                           } catch {
@@ -1533,7 +1584,16 @@ function AddStockModal({
             <Button
               type="submit"
               size="sm"
-              disabled={saving || !productId || !billStatus || !enteredQty}
+              disabled={
+                saving ||
+                !productId ||
+                !billStatus ||
+                !enteredQty ||
+                (uomId !== selectedProduct?.base_uom_id &&
+                  !selectedUomPermitted?.requiresMeasurement &&
+                  !activeConversion &&
+                  !paanoConversionPreview)
+              }
               className="bg-emerald-600 hover:bg-emerald-700 text-white"
             >
               {saving ? "Recording Movement…" : "Confirm & Add Stock"}
@@ -1705,6 +1765,27 @@ function RemoveStockModal({
     return availableRolls.find((r) => r.id === selectedRollId) || null;
   }, [availableRolls, selectedRollId]);
 
+  // Dynamic Paano-based dimensional conversion if no static rule exists
+  const paanoConversionPreview = useMemo(() => {
+    if (!enteredQty || !selectedProduct || !uomId) return null;
+    if (uomId === selectedProduct.base_uom_id) return null;
+    if (selectedUomPermitted?.requiresMeasurement) return null;
+    if (activeConversion) return null;
+    return convertPaanoDimension(
+      enteredQty,
+      selectedUomObj?.code,
+      selectedProduct.base_uom?.code,
+      selectedProduct.paano_in_feet,
+    );
+  }, [
+    enteredQty,
+    selectedProduct,
+    uomId,
+    selectedUomPermitted,
+    activeConversion,
+    selectedUomObj,
+  ]);
+
   // Compute calculated base deduction
   const baseDeductionPreview = useMemo(() => {
     if (!enteredQty || !selectedProduct) return null;
@@ -1721,6 +1802,9 @@ function RemoveStockModal({
       if (activeConversion?.factor) {
         return q.times(new Decimal(activeConversion.factor));
       }
+      if (paanoConversionPreview) {
+        return paanoConversionPreview;
+      }
       return null;
     } catch {
       return null;
@@ -1732,6 +1816,7 @@ function RemoveStockModal({
     selectedUomPermitted,
     measuredBaseQty,
     activeConversion,
+    paanoConversionPreview,
   ]);
 
   const isFeetUom = useMemo(() => {
@@ -1931,16 +2016,31 @@ function RemoveStockModal({
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   required
                 >
-                  {permittedUoms.map((p) => (
-                    <option key={p.uom.id} value={p.uom.id}>
-                      {p.uom.name} ({p.uom.code})
-                      {p.isBase
-                        ? " [Base Unit]"
-                        : p.requiresMeasurement
-                          ? " [Requires Measurement]"
-                          : " [Conversion Rule]"}
-                    </option>
-                  ))}
+                  {permittedUoms.map((p) => {
+                    const isPaanoUnit =
+                      !p.isBase &&
+                      !p.requiresMeasurement &&
+                      selectedProduct?.paano_in_feet != null &&
+                      convertPaanoDimension(
+                        "1",
+                        p.uom.code,
+                        selectedProduct.base_uom?.code,
+                        selectedProduct.paano_in_feet,
+                      ) !== null;
+
+                    return (
+                      <option key={p.uom.id} value={p.uom.id}>
+                        {p.uom.name} ({p.uom.code})
+                        {p.isBase
+                          ? " [Base Unit]"
+                          : p.requiresMeasurement
+                            ? " [Requires Measurement]"
+                            : isPaanoUnit
+                              ? " [Paano Dimension]"
+                              : " [Conversion Rule]"}
+                      </option>
+                    );
+                  })}
                 </select>
                 {permittedUoms.length === 1 && (
                   <p className="text-[11px] text-muted-foreground">
@@ -2026,6 +2126,12 @@ function RemoveStockModal({
                       {selectedProduct.base_uom?.code}
                     </strong>
                   </div>
+                  {paanoConversionPreview && (
+                    <div className="mt-0.5 text-[10px] text-blue-700">
+                      Converted using Height (Paano): {selectedProduct.paano_value}{" "}
+                      {selectedProduct.paano_unit}
+                    </div>
+                  )}
                   {exceedsStock ? (
                     <p className="mt-1 text-[11px] font-medium text-rose-700">
                       Cannot remove: Requested deduction exceeds available stock
@@ -2053,9 +2159,10 @@ function RemoveStockModal({
                     </div>
                   )}
 
-                  {/* Projected Remaining Physical Size for sqft products */}
+                  {/* Projected Remaining Physical Size for sqft or ft products */}
                   {!exceedsStock &&
-                    selectedProduct.base_uom?.code === "sqft" &&
+                    (selectedProduct.base_uom?.code === "sqft" ||
+                      selectedProduct.base_uom?.code === "ft") &&
                     selectedProduct.paano_in_feet != null &&
                     baseDeductionPreview && (
                       <div className="flex items-center justify-between mt-1 pt-1 border-t text-[11px]">
@@ -2068,6 +2175,7 @@ function RemoveStockModal({
                               baseDeductionPreview,
                             ),
                             selectedProduct.paano_in_feet,
+                            selectedProduct.base_uom?.code,
                           ) ?? "—"}
                         </strong>
                       </div>
@@ -2116,7 +2224,11 @@ function RemoveStockModal({
                 !productId ||
                 !billStatus ||
                 !enteredQty ||
-                exceedsStock
+                exceedsStock ||
+                (uomId !== selectedProduct?.base_uom_id &&
+                  !selectedUomPermitted?.requiresMeasurement &&
+                  !activeConversion &&
+                  !paanoConversionPreview)
               }
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >

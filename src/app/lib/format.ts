@@ -136,6 +136,97 @@ export function calculateDerivedLength(
 }
 
 /**
+ * Authoritatively converts between Linear and Area dimensions using product Paano (fixed width).
+ * - Area (sqft, sqm) -> Length (ft, m, in, mm): Length = Area ÷ Paano
+ * - Length (ft, m, in, mm) -> Area (sqft, sqm): Area = Length × Paano
+ * Returns null if the pair is not a valid Length <-> Area conversion or if Paano is missing/zero.
+ */
+export function convertPaanoDimension(
+  enteredQty: number | string | Decimal | null | undefined,
+  fromUomCode: string | null | undefined,
+  toUomCode: string | null | undefined,
+  paanoInFeet: number | string | Decimal | null | undefined,
+): Decimal | null {
+  if (!enteredQty || !fromUomCode || !toUomCode || !paanoInFeet) return null;
+
+  try {
+    const q = new Decimal(enteredQty);
+    if (q.isNegative() || q.isZero()) return null;
+
+    const widthFt = new Decimal(paanoInFeet);
+    if (widthFt.isNegative() || widthFt.isZero()) return null;
+
+    const from = fromUomCode.trim().toLowerCase();
+    const to = toUomCode.trim().toLowerCase();
+
+    const isArea = (code: string) => code === "sqft" || code === "sqm";
+    const isLength = (code: string) =>
+      code === "ft" || code === "m" || code === "in" || code === "mm";
+
+    // 1. Convert Area to Length: Length = Area ÷ Width
+    if (isArea(from) && isLength(to)) {
+      // Step A: Normalize Area to square feet (sqft)
+      const areaSqft =
+        from === "sqm"
+          ? q.dividedBy("0.09290304")
+          : q;
+
+      // Step B: Calculate linear feet
+      const lengthFt = areaSqft.dividedBy(widthFt);
+
+      // Step C: Convert linear feet to target length unit
+      switch (to) {
+        case "ft":
+          return lengthFt;
+        case "m":
+          return lengthFt.times("0.3048");
+        case "in":
+          return lengthFt.times(12);
+        case "mm":
+          return lengthFt.times("304.8");
+        default:
+          return lengthFt;
+      }
+    }
+
+    // 2. Convert Length to Area: Area = Length × Width
+    if (isLength(from) && isArea(to)) {
+      // Step A: Normalize Length to linear feet (ft)
+      let lengthFt: Decimal;
+      switch (from) {
+        case "ft":
+          lengthFt = q;
+          break;
+        case "m":
+          lengthFt = q.dividedBy("0.3048");
+          break;
+        case "in":
+          lengthFt = q.dividedBy(12);
+          break;
+        case "mm":
+          lengthFt = q.dividedBy("304.8");
+          break;
+        default:
+          lengthFt = q;
+      }
+
+      // Step B: Calculate area in square feet
+      const areaSqft = lengthFt.times(widthFt);
+
+      // Step C: Convert square feet to target area unit
+      if (to === "sqm") {
+        return areaSqft.times("0.09290304");
+      }
+      return areaSqft;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Formats physical dimensions for sqft products as "Fixed Width ft × Remaining Length ft".
  * Example: 40 sqft with 4 ft Paano -> "4 ft × 10 ft".
  * If stock is 32 sqft with 4 ft Paano -> "4 ft × 8 ft".

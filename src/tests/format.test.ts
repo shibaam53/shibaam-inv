@@ -7,6 +7,7 @@ import {
   calculateDerivedLength,
   formatPhysicalSize,
   formatPaano,
+  convertPaanoDimension,
 } from "@/app/lib/format";
 
 describe("formatQty (display-only rounding)", () => {
@@ -146,6 +147,64 @@ describe("formatPaano", () => {
 
   it("returns dash for missing value", () => {
     expect(formatPaano(null, "ft")).toBe("—");
+  });
+});
+
+describe("convertPaanoDimension", () => {
+  it("converts sqft to ft using Paano: Length = Area ÷ Paano", () => {
+    const result = convertPaanoDimension(80, "sqft", "ft", 4);
+    expect(result?.toString()).toBe("20");
+  });
+
+  it("converts ft to sqft using Paano: Area = Length × Paano", () => {
+    const result = convertPaanoDimension(20, "ft", "sqft", 4);
+    expect(result?.toString()).toBe("80");
+  });
+
+  it("converts sqm to ft using Paano", () => {
+    // 10 sqm / 0.09290304 sqft/m² / 4 ft = 26.9097760434... ft
+    const result = convertPaanoDimension(10, "sqm", "ft", 4);
+    expect(result?.toFixed(4)).toBe("26.9098");
+  });
+
+  it("converts m to sqft using Paano", () => {
+    // 10 m / 0.3048 ft/m * 4 ft = 131.2335958... sqft
+    const result = convertPaanoDimension(10, "m", "sqft", 4);
+    expect(result?.toFixed(4)).toBe("131.2336");
+  });
+
+  it("converts sqft to m using Paano", () => {
+    // 80 sqft / 4 ft = 20 ft * 0.3048 = 6.096 m
+    const result = convertPaanoDimension(80, "sqft", "m", 4);
+    expect(result?.toString()).toBe("6.096");
+  });
+
+  it("converts ft to sqm using Paano", () => {
+    // 20 ft * 4 ft = 80 sqft * 0.09290304 = 7.4322432 sqm
+    const result = convertPaanoDimension(20, "ft", "sqm", 4);
+    expect(result?.toString()).toBe("7.4322432");
+  });
+
+  it("converts in to sqft using Paano", () => {
+    // 48 in = 4 ft * 4 ft Paano = 16 sqft
+    const result = convertPaanoDimension(48, "in", "sqft", 4);
+    expect(result?.toString()).toBe("16");
+  });
+
+  it("converts sqft to in using Paano", () => {
+    // 16 sqft / 4 ft = 4 ft * 12 = 48 in
+    const result = convertPaanoDimension(16, "sqft", "in", 4);
+    expect(result?.toString()).toBe("48");
+  });
+
+  it("returns null for incompatible units like kg or pcs", () => {
+    expect(convertPaanoDimension(10, "kg", "ft", 4)).toBeNull();
+    expect(convertPaanoDimension(10, "sqft", "pcs", 4)).toBeNull();
+  });
+
+  it("returns null when paano is missing or zero", () => {
+    expect(convertPaanoDimension(80, "sqft", "ft", 0)).toBeNull();
+    expect(convertPaanoDimension(80, "sqft", "ft", null)).toBeNull();
   });
 });
 
