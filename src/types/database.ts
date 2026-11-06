@@ -301,7 +301,7 @@ export type Database = {
         Insert: {
           base_uom_id: string
           category_id?: string | null
-          code: string
+          code?: string
           created_at?: string
           description?: string | null
           gauge?: string | null
