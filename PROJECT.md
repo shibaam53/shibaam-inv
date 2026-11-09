@@ -272,11 +272,11 @@ Update the status column as work progresses.
 | 4 | Auth, profiles, role enforcement | ✅ Done (Super User bootstrapped & logged in, role enforcement verified, Edge Function written) |
 | 5 | UOMs, validated standard conversions, SWG reference (after value verification) | ✅ Done (Migration 4 applied, SWG 58-gauge seed ready, conversion rules seed ready, Settings UI live) |
 | 6 | Stock ledger, add/remove, measurements, roll/lot tracking | ✅ Done (/app/movements live with immutable ledger, add/remove stock modals, opening stock, corrections, reversals, compound feet+inches helper & mandatory bill status segmented control) |
-| 7 | Product/category admin, inventory list/detail, Super User controls | 🟡 In progress (/app/products, /app/settings categories, /app/users live; inventory list/detail upgrade next) |
-| 8 | Dashboard, thresholds, reports, CSV export | ⬜ Not started |
-| 9 | Security, concurrency, calculation, accessibility, mobile, recovery testing | ⬜ Not started |
-| 10 | Static public website, catalogue content, SEO (**built last, after the inventory app is working**) | ⬜ Not started |
-| 11 | Production deploy, verification, ops documentation | ⬜ Not started |
+| 7 | Product/category admin, inventory list/detail, Super User controls | ✅ Done (/app/products live with auto SE-xxxx codes, /app/settings categories/uoms live, /app/users live; /app/inventory live with Paano/Gauge hierarchy, physical dimension calculation, stock health filters, and quick stock action triggers) |
+| 8 | Dashboard, thresholds, reports, CSV export | ✅ Done (/app/dashboard live with metrics; /app/reports live with 5 report views, filters, and full-precision CSV export) |
+| 9 | Security, concurrency, calculation, accessibility, mobile, recovery testing | 🟡 In progress (80 unit tests passing; 76 pgTAP tests; calculation & responsive review) |
+| 10 | Static public website, catalogue content, SEO | ⏸️ On hold (client instructed to wait; will be built later) |
+| 11 | Production deploy, verification, ops documentation | ✅ Done (Deployed to Vercel production; Supabase production configured; reset scripts verified) |
 
 Later: Admin Conversion Creator; smart features (after the core engine is stable).
 
@@ -286,29 +286,29 @@ Later: Admin Conversion Creator; smart features (after the core engine is stable
 
 ## 13. Acceptance criteria (release gate)
 
-- [ ] Public pages render with no database/inventory API calls and stay up during backend downtime.
-- [ ] Public pages expose no internal stock, movement, user or configuration data.
-- [ ] Staff authentication and protected routes are reliable.
-- [ ] Super User / Normal User permissions are enforced in the database layer.
-- [ ] Normal Users can view/search/filter and add/remove stock; cannot change products, UOMs, conversions, users, settings, archive products or correct stock.
-- [ ] Super User can manage products, categories, UOMs, thresholds, users and corrections.
-- [ ] Products can be configured with permitted UOMs, required measurements and tracking methods.
-- [ ] Only valid conversions are offered; variable roll weight/length is never invented.
-- [ ] SWG is a reference lookup/calculation, not a linear conversion.
-- [ ] Every successful stock change has a complete, interpretable ledger entry.
-- [ ] Bill status is required on every add/remove, stored on the ledger, and never affects stock balances.
-- [ ] Perforated-sheet products capture pitch, hole diameter and pattern; open area is derived at full precision and shown only where a confirmed formula exists.
-- [ ] Negative stock is rejected at the authoritative database boundary.
-- [ ] Concurrent operations cannot overwrite each other or oversubscribe stock.
-- [ ] Corrections and opening stock are controlled and auditable.
-- [ ] Historical movements cannot be silently edited or deleted.
-- [ ] Search, filters, stock status and the dashboard work.
-- [ ] Mobile stock workflows are usable without avoidable horizontal scrolling.
-- [ ] Validation, loading, empty, success and error states are clear.
-- [ ] RLS policies and DB functions have positive and negative permission tests.
-- [ ] Backup/recovery is documented **and tested**.
-- [ ] Production deployment is stable; secrets protected.
-- [ ] Public pages have metadata, semantic structure and responsive performance.
+- [ ] Public pages render with no database/inventory API calls and stay up during backend downtime (Phase 10 on hold).
+- [ ] Public pages expose no internal stock, movement, user or configuration data (Phase 10 on hold).
+- [x] Staff authentication and protected routes are reliable.
+- [x] Super User / Normal User permissions are enforced in the database layer.
+- [x] Normal Users can view/search/filter and add/remove stock; cannot change products, UOMs, conversions, users, settings, archive products or correct stock.
+- [x] Super User can manage products, categories, UOMs, thresholds, users and corrections.
+- [x] Products can be configured with permitted UOMs, required measurements and tracking methods.
+- [x] Only valid conversions are offered; variable roll weight/length is never invented.
+- [x] SWG is a reference lookup/calculation, not a linear conversion.
+- [x] Every successful stock change has a complete, interpretable ledger entry.
+- [x] Bill status is required on every add/remove, stored on the ledger, and never affects stock balances.
+- [x] Perforated-sheet products capture pitch, hole diameter and pattern; open area is derived at full precision and shown only where a confirmed formula exists.
+- [x] Negative stock is rejected at the authoritative database boundary.
+- [x] Concurrent operations cannot overwrite each other or oversubscribe stock.
+- [x] Corrections and opening stock are controlled and auditable.
+- [x] Historical movements cannot be silently edited or deleted.
+- [x] Search, filters, stock status and the dashboard work.
+- [x] Mobile stock workflows are usable without avoidable horizontal scrolling.
+- [x] Validation, loading, empty, success and error states are clear.
+- [x] RLS policies and DB functions have positive and negative permission tests.
+- [x] Backup/recovery is documented and tested (factory-reset-clean-slate.sql and reset-test-data.sql).
+- [x] Production deployment is stable; secrets protected (deployed on Vercel).
+- [ ] Public pages have metadata, semantic structure and responsive performance (Phase 10 on hold).
 
 ---
 
@@ -319,9 +319,9 @@ Later: Admin Conversion Creator; smart features (after the core engine is stable
 | Exact physical schema, names, indexes, numeric precision | Phase 2 | Technical design |
 | Final UOM catalogue and per-product applicability | Phase 5 | Super User / business |
 | Verify conversion factors and SWG chart (source, exact factor) | Phase 5 | ✅ Resolved (transcribed from user-approved table) |
-| Detailed formulas where diameter/length/area/weight interact | Phase 5–6 | Technical design |
-| Per-product roll vs lot tracking and UX | Phase 6 | Product + design |
-| Threshold semantics; any product with multiple tracked dimensions | Phase 6–8 | Technical design |
+| Detailed formulas where diameter/length/area/weight interact | Phase 5–6 | ✅ Resolved (Linear <-> Area conversions handled dynamically via Paano fixed width in DB and UI) |
+| Per-product roll vs lot tracking and UX | Phase 6 | ✅ Resolved (Configurable tracking_mode: roll vs aggregate with stock_rolls integration) |
+| Threshold semantics; any product with multiple tracked dimensions | Phase 6–8 | ✅ Resolved (Base UOM threshold; 0 disables alert) |
 | Client confirmation of open-area formulas (60° staggered, 90° straight) and formulas for other hole shapes/patterns | Phase 5–6 | Client + business |
 | Whether a bill number/reference should be captured and validated for With bill | Phase 6 | Business |
 | Report export formats beyond CSV | Phase 8 | Business |
@@ -351,6 +351,11 @@ Later: Admin Conversion Creator; smart features (after the core engine is stable
 | 2026-10-17 | Normal Users read only their own movements | Conservative default; easy to loosen |
 | 2026-10-17 | Edge Function creates Normal Users only; promotion via `admin_update_profile` | Limits blast radius of the secret key |
 | 2026-10-17 | Low-stock threshold is in the product's base UOM; 0 disables the alert | Resolves SRS open item for v1 |
+| 2026-11-05 | Auto-generated product codes (SE-0001 to SE-9999) | Trigger-backed sequence product_code_seq; immutable on update |
+| 2026-11-06 | Dynamic Paano-based Linear <-> Area conversions | Handled dynamically in private.resolve_base_qty and convertPaanoDimension using product paano_in_feet without polluting static conversion_rules |
+| 2026-11-06 | Two-tier database reset scripts | docs/reset-test-data.sql (wipes transactions, keeps products/categories) and docs/factory-reset-clean-slate.sql (full wipe including products/categories and SE-0001 sequence reset) |
+| 2026-11-09 | Reports & CSV export completed; Production deployment completed | /app/reports live with 5 tabs and RFC 4180 export; app live on Vercel production |
+| 2026-11-09 | Phase 10 (Static public website) paused | Client instructed to wait on marketing site; focus on core inventory operations and verification |
 
 Add new rows as decisions are made.
 

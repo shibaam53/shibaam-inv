@@ -504,17 +504,22 @@ Treat the following values as pending verification, not certified standards: 1 m
 ### 21.6 SWG chart — user-approved source of truth
 The user has explicitly confirmed that the supplied photograph titled **“Standard Wire Gauge Conversion Table”** is the final approved SWG reference for Shibaam. The image is included in Appendix C of the Word version of this SRS. It is not a placeholder and does not require external chart approval. Implementation must transcribe the gauge number and its inch and millimetre diameter values from this image. Do not replace the table with an external standard or silently normalize its displayed values. If a specific character cannot be read reliably from the photograph, ask the user about that row rather than inventing a value. SWG remains a lookup scale, not a linear unit.
 
+### 21.7 Product code generation and dimensional conversions
+- **Automated product codes:** Products are assigned sequential codes formatted as `SE-0001` through `SE-9999` backed by database sequence `product_code_seq` on insertion. The product code is immutable once assigned.
+- **Dynamic Paano dimensional conversions:** For continuous roll and wire-mesh products having a configured Height (Paano / fixed width), the system dynamically computes exact conversions between linear units (`ft`, `m`, `in`, `mm`) and area units (`sqft`, `sqm`) without rounding. Conversions are enforced authoritatively in PostgreSQL RPC `private.resolve_base_qty` and previewed client-side using `Decimal.js`.
+- **Database handover & reset procedures:** Documented and tested cleanup scripts live in `docs/` (`reset-test-data.sql` for resetting transactions while keeping catalog items, and `factory-reset-clean-slate.sql` for complete factory reset including sequence reset).
+
 ## 22. Acceptance criteria additions
-- [ ] Add/remove forms require explicit With bill / Without bill selection, with no default.
-- [ ] Bill status is persisted on add/remove ledger records, does not alter stock balances, and is NULL for opening/correction; reversals inherit it.
-- [ ] Bill-status reports and filters are available only to the Super User.
-- [ ] Perforated-sheet pitch and hole diameter are separate searchable fields and display on inventory list/detail.
-- [ ] Open area is database-derived at full precision only for a confirmed formula; unsupported patterns show no figure.
-- [ ] Perforated-sheet identity fields cannot be changed after the first movement.
-- [ ] SWG reference data is transcribed from the user-approved image; no substitute chart is loaded.
-- [ ] No calculation-path rounding occurs; UI-only rounding never becomes stored input.
-- [ ] All public-schema tables have RLS and privileged functions enforce role and active status.
-- [ ] Public signup is disabled and privileged user creation is server-side only.
+- [x] Add/remove forms require explicit With bill / Without bill selection, with no default.
+- [x] Bill status is persisted on add/remove ledger records, does not alter stock balances, and is NULL for opening/correction; reversals inherit it.
+- [x] Bill-status reports and filters are available only to the Super User.
+- [x] Perforated-sheet pitch and hole diameter are separate searchable fields and display on inventory list/detail.
+- [x] Open area is database-derived at full precision only for a confirmed formula; unsupported patterns show no figure.
+- [x] Perforated-sheet identity fields cannot be changed after the first movement.
+- [x] SWG reference data is transcribed from the user-approved image; no substitute chart is loaded.
+- [x] No calculation-path rounding occurs; UI-only rounding never becomes stored input.
+- [x] All public-schema tables have RLS and privileged functions enforce role and active status.
+- [x] Public signup is disabled and privileged user creation is server-side only.
 
 ## Appendix C — Approved SWG reference image
 The following user-supplied image is the authoritative SWG table for this project. Preserve it as the transcription source during implementation.

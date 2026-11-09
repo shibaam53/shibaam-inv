@@ -7,7 +7,7 @@ const LoginPage = lazy(() => import("@/app/pages/LoginPage"));
 const DashboardPage = lazy(() => import("@/app/pages/DashboardPage"));
 const InventoryPage = lazy(() => import("@/app/pages/InventoryPage"));
 const MovementsPage = lazy(() => import("@/app/pages/MovementsPage"));
-const PlaceholderPage = lazy(() => import("@/app/pages/PlaceholderPage"));
+const ReportsPage = lazy(() => import("@/app/pages/ReportsPage"));
 const ProductsPage = lazy(() => import("@/app/pages/ProductsPage"));
 const SettingsPage = lazy(() => import("@/app/pages/SettingsPage"));
 const UsersPage = lazy(() => import("@/app/pages/UsersPage"));
@@ -28,7 +28,7 @@ export default function App() {
               <Route path="dashboard" element={<DashboardPage />} />
               <Route path="inventory" element={<InventoryPage />} />
               <Route path="movements" element={<MovementsPage />} />
-              <Route path="reports" element={<PlaceholderPage title="Reports" phase="Phase 8" />} />
+              <Route path="reports" element={<ReportsPage />} />
 
               <Route element={<RequireSuperUser />}>
                 <Route path="products" element={<ProductsPage />} />
