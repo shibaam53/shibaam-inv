@@ -68,7 +68,7 @@ type ExpandedProductDetails = {
     description: string | null;
     specs: Json;
     swg?: { gauge: string; diameter_mm: number } | null;
-    perforation?: { hole_diameter_mm: number; pitch_mm: number } | null;
+    perforation?: { hole_diameter_mm: number; pitch_mm: number | null } | null;
     product_uoms?: {
       uom_id: string;
       requires_measurement: boolean;
@@ -676,8 +676,8 @@ function ExpandedProductDetailsPanel({
               <span className="text-[10px] uppercase font-semibold text-muted-foreground block">
                 Pitch (p)
               </span>
-              <span className="font-mono font-bold text-brand-blue">
-                {perforation.pitch_mm} mm
+              <span className="font-mono font-medium text-foreground">
+                {perforation.pitch_mm != null ? `${perforation.pitch_mm} mm` : "—"}
               </span>
             </div>
           </>

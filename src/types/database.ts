@@ -209,17 +209,17 @@ export type Database = {
       product_perforation: {
         Row: {
           hole_diameter_mm: number
-          pitch_mm: number
+          pitch_mm: number | null
           product_id: string
         }
         Insert: {
           hole_diameter_mm: number
-          pitch_mm: number
+          pitch_mm?: number | null
           product_id: string
         }
         Update: {
           hole_diameter_mm?: number
-          pitch_mm?: number
+          pitch_mm?: number | null
           product_id?: string
         }
         Relationships: [

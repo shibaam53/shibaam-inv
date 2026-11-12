@@ -446,7 +446,10 @@ export default function ProductsPage() {
                         {p.perforation && (
                           <div className="col-span-2 text-[11px] text-muted-foreground border-t pt-1.5 mt-0.5">
                             <span className="text-primary font-medium">
-                              Ø{p.perforation.hole_diameter_mm}mm · Pitch {p.perforation.pitch_mm}mm
+                              Ø{p.perforation.hole_diameter_mm}mm
+                              {p.perforation.pitch_mm != null
+                                ? ` · Pitch ${p.perforation.pitch_mm}mm`
+                                : ""}
                             </span>
                           </div>
                         )}
@@ -586,8 +589,10 @@ export default function ProductsPage() {
                             <div className="space-y-1">
                               {p.perforation && (
                                 <span className="inline-flex items-center gap-1 text-primary font-medium bg-primary/10 rounded px-1.5 py-0.5">
-                                  Ø{p.perforation.hole_diameter_mm}mm · P=
-                                  {p.perforation.pitch_mm}mm
+                                  Ø{p.perforation.hole_diameter_mm}mm
+                                  {p.perforation.pitch_mm != null
+                                    ? ` · P=${p.perforation.pitch_mm}mm`
+                                    : ""}
                                 </span>
                               )}
                               {p.paano_value != null && p.paano_unit && (
@@ -857,7 +862,7 @@ function ProductFormModal({
     if (!categoryId) return setError("Category is required.");
     if (!baseUomId) return setError("Base UOM is required.");
 
-    // Perforation validation
+    // Perforation validation: hole diameter is mandatory, pitch is optional
     if (isPerforated) {
       if (!holeDiameter.trim()) {
         return setError("Hole diameter in mm is required for perforated sheets.");
@@ -866,38 +871,33 @@ function ProductFormModal({
       if (isNaN(d) || d <= 0) {
         return setError("Valid positive hole diameter in mm is required.");
       }
-      if (!pitch.trim()) {
-        return setError("Pitch in mm is required for perforated sheets.");
-      }
-      const p = parseFloat(pitch);
-      if (isNaN(p) || p <= 0) {
-        return setError("Valid positive pitch in mm is required.");
-      }
-      if (p <= d) {
-        return setError("Pitch must be greater than hole diameter (p > d).");
-      }
-    } else {
-      // Optional when unchecked: if either is entered, validate format and pair
-      const hasD = holeDiameter.trim() !== "";
-      const hasP = pitch.trim() !== "";
-      if (hasD || hasP) {
-        if (hasD && !hasP) {
-          return setError("Please also provide pitch in mm, or clear hole diameter.");
-        }
-        if (!hasD && hasP) {
-          return setError("Please also provide hole diameter in mm, or clear pitch.");
-        }
-        const d = parseFloat(holeDiameter);
+      if (pitch.trim()) {
         const p = parseFloat(pitch);
-        if (isNaN(d) || d <= 0) {
-          return setError("Valid positive hole diameter in mm is required.");
-        }
         if (isNaN(p) || p <= 0) {
-          return setError("Valid positive pitch in mm is required.");
+          return setError("Pitch must be a valid positive number in mm if provided.");
         }
         if (p <= d) {
           return setError("Pitch must be greater than hole diameter (p > d).");
         }
+      }
+    } else {
+      // Optional when unchecked: if entered, validate format
+      if (holeDiameter.trim()) {
+        const d = parseFloat(holeDiameter);
+        if (isNaN(d) || d <= 0) {
+          return setError("Valid positive hole diameter in mm is required.");
+        }
+        if (pitch.trim()) {
+          const p = parseFloat(pitch);
+          if (isNaN(p) || p <= 0) {
+            return setError("Pitch must be a valid positive number in mm if provided.");
+          }
+          if (p <= d) {
+            return setError("Pitch must be greater than hole diameter (p > d).");
+          }
+        }
+      } else if (pitch.trim()) {
+        return setError("Please also provide hole diameter in mm if pitch is entered.");
       }
     }
 
@@ -959,7 +959,7 @@ function ProductFormModal({
               .insert({
                 product_id: newProd.id,
                 hole_diameter_mm: Number(holeDiameter),
-                pitch_mm: Number(pitch),
+                pitch_mm: pitch.trim() ? Number(pitch) : null,
               })
               .select()
               .single();
@@ -1039,7 +1039,7 @@ function ProductFormModal({
                 .upsert({
                   product_id: product.id,
                   hole_diameter_mm: Number(holeDiameter),
-                  pitch_mm: Number(pitch),
+                  pitch_mm: pitch.trim() ? Number(pitch) : null,
                 })
                 .select()
                 .single();
@@ -1158,7 +1158,7 @@ function ProductFormModal({
                 <span>Perforated Sheet</span>
               </label>
               <p className="text-xs text-muted-foreground pl-6.5">
-                Check if this product is a perforated sheet (requires hole diameter & pitch).
+                Check if this product is a perforated sheet (requires hole diameter, pitch is optional).
               </p>
             </div>
             {isPerforated && (
@@ -1560,10 +1560,7 @@ function ProductFormModal({
                 Perforated Sheet Specifications
               </span>
               <p className="text-xs text-muted-foreground">
-                Hole diameter and pitch (centre-to-centre distance).
-                {isPerforated
-                  ? " Required when Perforated Sheet is selected."
-                  : " Optional when Perforated Sheet is unchecked."}
+                Hole diameter (required) and pitch (optional centre-to-centre distance).
               </p>
             </div>
 
@@ -1590,20 +1587,20 @@ function ProductFormModal({
                     htmlFor="hole-pitch"
                     className="text-xs font-semibold text-brand-blue"
                   >
-                    Pitch (p in mm) {isPerforated && <span className="text-destructive">*</span>}
+                    Pitch (p in mm) <span className="text-[11px] font-normal text-muted-foreground">(Optional)</span>
                   </Label>
                   <Input
                     id="hole-pitch"
                     type="number"
                     step="any"
-                    placeholder="e.g. 5.0"
+                    placeholder="e.g. 5.0 (optional)"
                     value={pitch}
                     onChange={(e) => setPitch(e.target.value)}
                     disabled={isPending || hasMovements}
                     className="h-8 text-xs font-medium"
                   />
                   <p className="text-[10px] text-muted-foreground">
-                    Centre-to-centre distance (p &gt; d)
+                    Centre-to-centre distance (p &gt; d if provided)
                   </p>
                 </div>
               </div>
@@ -1823,8 +1820,10 @@ function ProductDetailsModal({
                 </div>
                 <div>
                   <span className="text-muted-foreground">Pitch (p):</span>{" "}
-                  <span className="font-mono font-bold text-brand-blue">
-                    {product.perforation.pitch_mm} mm
+                  <span className="font-mono font-medium text-foreground">
+                    {product.perforation.pitch_mm != null
+                      ? `${product.perforation.pitch_mm} mm`
+                      : "— (Not specified)"}
                   </span>
                 </div>
               </div>
