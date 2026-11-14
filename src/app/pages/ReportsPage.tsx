@@ -11,15 +11,19 @@ import {
   Search,
   RefreshCw,
   Package,
-  SlidersHorizontal,
+  RotateCcw,
+  X,
   Plus,
   Minus,
   Sparkles,
-  RotateCcw,
-  X,
+  SlidersHorizontal,
+  SearchX,
+  PackageOpen,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PaginationBar } from "@/app/components/PaginationBar";
 import { useAuth } from "@/app/lib/auth";
 import { supabase } from "@/app/lib/supabase";
 import { exportToCsv, type CsvColumn } from "@/app/lib/csvExport";
@@ -103,6 +107,57 @@ type ReportTab =
   | "movements"
   | "rolls"
   | "bill-status";
+
+function EmptyState({
+  hasFilters,
+  onReset,
+  title,
+  description,
+  allClear = false,
+}: {
+  hasFilters: boolean;
+  onReset?: () => void;
+  title?: string;
+  description?: string;
+  allClear?: boolean;
+}) {
+  return (
+    <div className="rounded-lg border border-dashed p-8 text-center bg-card shadow-2xs">
+      <div
+        className={`mx-auto flex h-12 w-12 items-center justify-center rounded-full ${
+          allClear ? "bg-emerald-100 text-emerald-800" : "bg-muted text-muted-foreground"
+        }`}
+      >
+        {allClear ? (
+          <CheckCircle2 className="h-6 w-6" />
+        ) : hasFilters ? (
+          <SearchX className="h-6 w-6" />
+        ) : (
+          <PackageOpen className="h-6 w-6" />
+        )}
+      </div>
+      <h3 className="mt-3 text-sm font-semibold text-foreground">
+        {title || (hasFilters ? "No matching records found" : "No records available")}
+      </h3>
+      <p className="mt-1 text-xs text-muted-foreground max-w-sm mx-auto">
+        {description ||
+          (hasFilters
+            ? "No report items matched your active search query or filter parameters."
+            : "No inventory or movement records have been found for this report view.")}
+      </p>
+      {hasFilters && onReset && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onReset}
+          className="mt-4 text-xs font-semibold"
+        >
+          <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Clear Filters
+        </Button>
+      )}
+    </div>
+  );
+}
 
 export default function ReportsPage() {
   const { isSuperUser } = useAuth();
@@ -227,7 +282,10 @@ export default function ReportsPage() {
   };
 
   useEffect(() => {
-    loadAllData();
+    const timer = setTimeout(() => {
+      void loadAllData();
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   // Preset Date Handlers
@@ -456,6 +514,81 @@ export default function ReportsPage() {
     setRollStatusFilter("all");
     setBillFilter("all");
   };
+
+  // ---------------------------------------------------------------------------
+  // PAGINATION CONTROLS
+  // ---------------------------------------------------------------------------
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(() =>
+    typeof window !== "undefined" && window.innerWidth >= 768 ? 25 : 10,
+  );
+
+  // Active dataset based on activeTab
+  const activeDataset = useMemo(() => {
+    switch (activeTab) {
+      case "stock-summary":
+        return filteredStockSummary;
+      case "low-stock":
+        return filteredLowStock;
+      case "movements":
+        return filteredMovements;
+      case "rolls":
+        return filteredRolls;
+      case "bill-status":
+        return filteredBillMovements;
+      default:
+        return [];
+    }
+  }, [
+    activeTab,
+    filteredStockSummary,
+    filteredLowStock,
+    filteredMovements,
+    filteredRolls,
+    filteredBillMovements,
+  ]);
+
+  // Reset to page 1 during render when tab or filter changes (avoids cascading effect renders)
+  const filterKey = `${activeTab}|${search}|${categoryFilter}|${dateRangePreset}|${dateFrom}|${dateTo}|${movementTypeFilter}|${rollStatusFilter}|${billFilter}`;
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+  if (prevFilterKey !== filterKey) {
+    setPrevFilterKey(filterKey);
+    setCurrentPage(1);
+  }
+
+  const totalPages = Math.max(1, Math.ceil(activeDataset.length / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+
+  // Paginated slices for each tab
+  const paginatedStockSummary = useMemo(() => {
+    if (activeTab !== "stock-summary") return [];
+    const start = (safeCurrentPage - 1) * pageSize;
+    return filteredStockSummary.slice(start, start + pageSize);
+  }, [activeTab, filteredStockSummary, safeCurrentPage, pageSize]);
+
+  const paginatedLowStock = useMemo(() => {
+    if (activeTab !== "low-stock") return [];
+    const start = (safeCurrentPage - 1) * pageSize;
+    return filteredLowStock.slice(start, start + pageSize);
+  }, [activeTab, filteredLowStock, safeCurrentPage, pageSize]);
+
+  const paginatedMovements = useMemo(() => {
+    if (activeTab !== "movements") return [];
+    const start = (safeCurrentPage - 1) * pageSize;
+    return filteredMovements.slice(start, start + pageSize);
+  }, [activeTab, filteredMovements, safeCurrentPage, pageSize]);
+
+  const paginatedRolls = useMemo(() => {
+    if (activeTab !== "rolls") return [];
+    const start = (safeCurrentPage - 1) * pageSize;
+    return filteredRolls.slice(start, start + pageSize);
+  }, [activeTab, filteredRolls, safeCurrentPage, pageSize]);
+
+  const paginatedBillMovements = useMemo(() => {
+    if (activeTab !== "bill-status") return [];
+    const start = (safeCurrentPage - 1) * pageSize;
+    return filteredBillMovements.slice(start, start + pageSize);
+  }, [activeTab, filteredBillMovements, safeCurrentPage, pageSize]);
 
   // ---------------------------------------------------------------------------
   // CSV EXPORT HANDLERS (FULL PRECISION)
@@ -694,25 +827,24 @@ export default function ReportsPage() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-ink flex items-center gap-2">
-            <FileSpreadsheet className="h-6 w-6 text-brand-blue" />
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink flex items-center gap-2">
+            <FileSpreadsheet className="h-6 w-6 text-brand-blue shrink-0" />
             Inventory & Operational Reports
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Authoritative reporting suite with full-precision unrounded data
-            exports.
+          <p className="text-xs sm:text-sm text-muted-foreground">
+            Authoritative reporting suite with full-precision unrounded data exports.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <Button
             variant="outline"
             size="sm"
             onClick={loadAllData}
             disabled={loading}
-            className="text-xs"
+            className="flex-1 sm:flex-none text-xs min-h-[38px] font-medium"
           >
             <RefreshCw
               className={`mr-1.5 h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
@@ -723,11 +855,11 @@ export default function ReportsPage() {
           <Button
             size="sm"
             onClick={handleExportCsv}
-            disabled={loading}
-            className="bg-brand-blue hover:bg-brand-blue/90 text-white shadow-xs text-xs font-medium"
+            disabled={loading || activeDataset.length === 0}
+            className="flex-1 sm:flex-none bg-brand-blue hover:bg-brand-blue/90 text-white shadow-xs text-xs font-medium min-h-[38px]"
           >
             <Download className="mr-1.5 h-3.5 w-3.5" />
-            Export to CSV
+            Export CSV {activeDataset.length > 0 ? `(${activeDataset.length})` : ""}
           </Button>
         </div>
       </div>
@@ -740,11 +872,11 @@ export default function ReportsPage() {
         </div>
       )}
 
-      {/* Tabs navigation */}
-      <div className="flex flex-wrap items-center gap-1.5 border-b pb-2">
+      {/* Tabs navigation - Smooth horizontal scroll on mobile */}
+      <div className="flex items-center gap-2 border-b pb-2.5 overflow-x-auto no-scrollbar sm:flex-wrap">
         <button
           onClick={() => setActiveTab("stock-summary")}
-          className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-all ${
+          className={`shrink-0 flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-all min-h-[38px] ${
             activeTab === "stock-summary"
               ? "bg-brand-blue text-white shadow-xs"
               : "text-muted-foreground hover:bg-surface hover:text-foreground"
@@ -753,7 +885,7 @@ export default function ReportsPage() {
           <Layers className="h-3.5 w-3.5" />
           Stock Summary
           <span
-            className={`ml-1 rounded-full px-1.5 py-0.2 text-[10px] font-mono ${
+            className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-mono ${
               activeTab === "stock-summary"
                 ? "bg-white/20 text-white"
                 : "bg-surface text-muted-foreground"
@@ -765,7 +897,7 @@ export default function ReportsPage() {
 
         <button
           onClick={() => setActiveTab("low-stock")}
-          className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-all ${
+          className={`shrink-0 flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-all min-h-[38px] ${
             activeTab === "low-stock"
               ? "bg-amber-600 text-white shadow-xs"
               : "text-muted-foreground hover:bg-surface hover:text-foreground"
@@ -775,7 +907,7 @@ export default function ReportsPage() {
           Low Stock & Reorders
           {filteredLowStock.length > 0 && (
             <span
-              className={`ml-1 rounded-full px-1.5 py-0.2 text-[10px] font-mono ${
+              className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-mono ${
                 activeTab === "low-stock"
                   ? "bg-white/20 text-white"
                   : "bg-amber-100 text-amber-800"
@@ -788,7 +920,7 @@ export default function ReportsPage() {
 
         <button
           onClick={() => setActiveTab("movements")}
-          className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-all ${
+          className={`shrink-0 flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-all min-h-[38px] ${
             activeTab === "movements"
               ? "bg-brand-blue text-white shadow-xs"
               : "text-muted-foreground hover:bg-surface hover:text-foreground"
@@ -797,7 +929,7 @@ export default function ReportsPage() {
           <Calendar className="h-3.5 w-3.5" />
           Movement Ledger
           <span
-            className={`ml-1 rounded-full px-1.5 py-0.2 text-[10px] font-mono ${
+            className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-mono ${
               activeTab === "movements"
                 ? "bg-white/20 text-white"
                 : "bg-surface text-muted-foreground"
@@ -809,7 +941,7 @@ export default function ReportsPage() {
 
         <button
           onClick={() => setActiveTab("rolls")}
-          className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-all ${
+          className={`shrink-0 flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-all min-h-[38px] ${
             activeTab === "rolls"
               ? "bg-brand-blue text-white shadow-xs"
               : "text-muted-foreground hover:bg-surface hover:text-foreground"
@@ -818,7 +950,7 @@ export default function ReportsPage() {
           <Package className="h-3.5 w-3.5" />
           Roll Inventory
           <span
-            className={`ml-1 rounded-full px-1.5 py-0.2 text-[10px] font-mono ${
+            className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-mono ${
               activeTab === "rolls"
                 ? "bg-white/20 text-white"
                 : "bg-surface text-muted-foreground"
@@ -831,7 +963,7 @@ export default function ReportsPage() {
         {isSuperUser && (
           <button
             onClick={() => setActiveTab("bill-status")}
-            className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-all ${
+            className={`shrink-0 flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-all min-h-[38px] ${
               activeTab === "bill-status"
                 ? "bg-purple-700 text-white shadow-xs"
                 : "text-purple-700 hover:bg-purple-50"
@@ -840,7 +972,7 @@ export default function ReportsPage() {
             <Receipt className="h-3.5 w-3.5" />
             Bill Status Breakdown
             <span
-              className={`ml-1 rounded-full px-1.5 py-0.2 text-[10px] font-mono ${
+              className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-mono ${
                 activeTab === "bill-status"
                   ? "bg-white/20 text-white"
                   : "bg-purple-100 text-purple-800"
@@ -875,29 +1007,55 @@ export default function ReportsPage() {
           )}
         </div>
 
-        {/* Category filter (Stock Summary & Low Stock) */}
+        {/* Category filter (Stock Summary & Low Stock) + Reset button */}
         {(activeTab === "stock-summary" || activeTab === "low-stock") && (
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="h-8 rounded-md border border-input bg-background px-2.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring shrink-0"
-          >
-            <option value="all">All Categories</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="h-8 rounded-md border border-input bg-background px-2.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring flex-1 sm:w-auto min-w-0"
+            >
+              <option value="all">All Categories</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <div className="relative inline-flex items-center group shrink-0">
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                disabled={!hasActiveFilters}
+                title="Reset filters"
+                aria-label="Reset filters"
+                className={`h-8 w-8 rounded-md flex items-center justify-center transition-all ${
+                  hasActiveFilters
+                    ? "text-muted-foreground hover:text-foreground hover:bg-muted border border-input shadow-2xs cursor-pointer"
+                    : "text-muted-foreground/25 border border-transparent cursor-default pointer-events-none opacity-40"
+                }`}
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+              </button>
+              {hasActiveFilters && (
+                <div className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col items-center z-30">
+                  <span className="rounded bg-navy px-2 py-0.5 text-[10px] font-medium text-white shadow-xs whitespace-nowrap">
+                    Reset filters
+                  </span>
+                  <span className="h-1 w-1 -mt-0.5 rotate-45 bg-navy" />
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
-        {/* Date Presets (Movement Ledger & Bill Status) - Compact Dropdown */}
+        {/* Date Presets (Movement Ledger & Bill Status) - Responsive Custom Range */}
         {(activeTab === "movements" || activeTab === "bill-status") && (
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
             <select
               value={dateRangePreset}
               onChange={(e) => handleDatePreset(e.target.value)}
-              className="h-8 rounded-md border border-input bg-background px-2.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="h-8 rounded-md border border-input bg-background px-2.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring w-full sm:w-auto"
             >
               <option value="30d">Last 30 Days</option>
               <option value="today">Today</option>
@@ -907,20 +1065,20 @@ export default function ReportsPage() {
             </select>
 
             {dateRangePreset === "custom" && (
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5 w-full sm:w-auto">
                 <input
                   type="date"
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
-                  className="h-8 w-28 rounded-md border border-input bg-background px-1.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="h-8 flex-1 sm:w-28 min-w-0 rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   title="Start Date"
                 />
-                <span className="text-xs text-muted-foreground">to</span>
+                <span className="text-xs text-muted-foreground shrink-0 font-medium">to</span>
                 <input
                   type="date"
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
-                  className="h-8 w-28 rounded-md border border-input bg-background px-1.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="h-8 flex-1 sm:w-28 min-w-0 rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   title="End Date"
                 />
               </div>
@@ -928,74 +1086,125 @@ export default function ReportsPage() {
           </div>
         )}
 
-        {/* Movement Type Filter */}
+        {/* Movement Type Filter + Reset button */}
         {activeTab === "movements" && (
-          <select
-            value={movementTypeFilter}
-            onChange={(e) => setMovementTypeFilter(e.target.value)}
-            className="h-8 rounded-md border border-input bg-background px-2.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring shrink-0"
-          >
-            <option value="all">All Movement Types</option>
-            <option value="add">Add (Inward)</option>
-            <option value="remove">Remove (Outward)</option>
-            <option value="opening">Opening Stock</option>
-            <option value="correction">Correction</option>
-            <option value="reversal">Reversal</option>
-          </select>
-        )}
-
-        {/* Roll Status Filter */}
-        {activeTab === "rolls" && (
-          <select
-            value={rollStatusFilter}
-            onChange={(e) => setRollStatusFilter(e.target.value)}
-            className="h-8 rounded-md border border-input bg-background px-2.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring shrink-0"
-          >
-            <option value="all">All Roll Statuses</option>
-            <option value="in_stock">In Stock Only</option>
-            <option value="depleted">Depleted Only</option>
-          </select>
-        )}
-
-        {/* Bill Status Filter (Super User) */}
-        {activeTab === "bill-status" && (
-          <select
-            value={billFilter}
-            onChange={(e) => setBillFilter(e.target.value)}
-            className="h-8 rounded-md border border-input bg-background px-2.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring shrink-0"
-          >
-            <option value="all">All Bill Statuses</option>
-            <option value="with_bill">With Bill</option>
-            <option value="without_bill">Without Bill</option>
-          </select>
-        )}
-
-        {/* Reset Filters icon button with hover tooltip */}
-        <div className="relative inline-flex items-center group shrink-0">
-          <button
-            type="button"
-            onClick={handleResetFilters}
-            disabled={!hasActiveFilters}
-            title="Reset filters"
-            aria-label="Reset filters"
-            className={`h-8 w-8 rounded-md flex items-center justify-center transition-all ${
-              hasActiveFilters
-                ? "text-muted-foreground hover:text-foreground hover:bg-muted border border-input shadow-2xs cursor-pointer"
-                : "text-muted-foreground/25 border border-transparent cursor-default pointer-events-none opacity-40"
-            }`}
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-          </button>
-
-          {hasActiveFilters && (
-            <div className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col items-center z-30">
-              <span className="rounded bg-navy px-2 py-0.5 text-[10px] font-medium text-white shadow-xs whitespace-nowrap">
-                Reset filters
-              </span>
-              <span className="h-1 w-1 -mt-0.5 rotate-45 bg-navy" />
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <select
+              value={movementTypeFilter}
+              onChange={(e) => setMovementTypeFilter(e.target.value)}
+              className="h-8 rounded-md border border-input bg-background px-2.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring flex-1 sm:w-auto min-w-0"
+            >
+              <option value="all">All Movement Types</option>
+              <option value="add">Add (Inward)</option>
+              <option value="remove">Remove (Outward)</option>
+              <option value="opening">Opening Stock</option>
+              <option value="correction">Correction</option>
+              <option value="reversal">Reversal</option>
+            </select>
+            <div className="relative inline-flex items-center group shrink-0">
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                disabled={!hasActiveFilters}
+                title="Reset filters"
+                aria-label="Reset filters"
+                className={`h-8 w-8 rounded-md flex items-center justify-center transition-all ${
+                  hasActiveFilters
+                    ? "text-muted-foreground hover:text-foreground hover:bg-muted border border-input shadow-2xs cursor-pointer"
+                    : "text-muted-foreground/25 border border-transparent cursor-default pointer-events-none opacity-40"
+                }`}
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+              </button>
+              {hasActiveFilters && (
+                <div className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col items-center z-30">
+                  <span className="rounded bg-navy px-2 py-0.5 text-[10px] font-medium text-white shadow-xs whitespace-nowrap">
+                    Reset filters
+                  </span>
+                  <span className="h-1 w-1 -mt-0.5 rotate-45 bg-navy" />
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* Roll Status Filter + Reset button */}
+        {activeTab === "rolls" && (
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <select
+              value={rollStatusFilter}
+              onChange={(e) => setRollStatusFilter(e.target.value)}
+              className="h-8 rounded-md border border-input bg-background px-2.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring flex-1 sm:w-auto min-w-0"
+            >
+              <option value="all">All Roll Statuses</option>
+              <option value="in_stock">In Stock Only</option>
+              <option value="depleted">Depleted Only</option>
+            </select>
+            <div className="relative inline-flex items-center group shrink-0">
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                disabled={!hasActiveFilters}
+                title="Reset filters"
+                aria-label="Reset filters"
+                className={`h-8 w-8 rounded-md flex items-center justify-center transition-all ${
+                  hasActiveFilters
+                    ? "text-muted-foreground hover:text-foreground hover:bg-muted border border-input shadow-2xs cursor-pointer"
+                    : "text-muted-foreground/25 border border-transparent cursor-default pointer-events-none opacity-40"
+                }`}
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+              </button>
+              {hasActiveFilters && (
+                <div className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col items-center z-30">
+                  <span className="rounded bg-navy px-2 py-0.5 text-[10px] font-medium text-white shadow-xs whitespace-nowrap">
+                    Reset filters
+                  </span>
+                  <span className="h-1 w-1 -mt-0.5 rotate-45 bg-navy" />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Bill Status Filter (Super User) + Reset button */}
+        {activeTab === "bill-status" && (
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <select
+              value={billFilter}
+              onChange={(e) => setBillFilter(e.target.value)}
+              className="h-8 rounded-md border border-input bg-background px-2.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring flex-1 sm:w-auto min-w-0"
+            >
+              <option value="all">All Bill Statuses</option>
+              <option value="with_bill">With Bill</option>
+              <option value="without_bill">Without Bill</option>
+            </select>
+            <div className="relative inline-flex items-center group shrink-0">
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                disabled={!hasActiveFilters}
+                title="Reset filters"
+                aria-label="Reset filters"
+                className={`h-8 w-8 rounded-md flex items-center justify-center transition-all ${
+                  hasActiveFilters
+                    ? "text-muted-foreground hover:text-foreground hover:bg-muted border border-input shadow-2xs cursor-pointer"
+                    : "text-muted-foreground/25 border border-transparent cursor-default pointer-events-none opacity-40"
+                }`}
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+              </button>
+              {hasActiveFilters && (
+                <div className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col items-center z-30">
+                  <span className="rounded bg-navy px-2 py-0.5 text-[10px] font-medium text-white shadow-xs whitespace-nowrap">
+                    Reset filters
+                  </span>
+                  <span className="h-1 w-1 -mt-0.5 rotate-45 bg-navy" />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* --------------------------------------------------------------------- */}
@@ -1058,85 +1267,162 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          {/* Table */}
-          <div className="overflow-hidden rounded-lg border bg-card shadow-2xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-surface border-b font-medium text-muted-foreground">
-                  <tr>
-                    <th className="py-2.5 px-3">Code</th>
-                    <th className="py-2.5 px-3">Product Name</th>
-                    <th className="py-2.5 px-3">Category</th>
-                    <th className="py-2.5 px-3">Base Unit</th>
-                    <th className="py-2.5 px-3 text-right">On-Hand Stock</th>
-                    <th className="py-2.5 px-3 text-center">Health Status</th>
-                    <th className="py-2.5 px-3">Remaining Physical Size</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filteredStockSummary.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={7}
-                        className="py-8 text-center text-muted-foreground"
-                      >
-                        No products match your filters.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredStockSummary.map((p) => {
-                      const balance = getProductStockBalance(p);
-                      const threshold = p.low_stock_threshold ?? 0;
-                      const isOutOfStock = balance <= 0;
-                      const isLowStock = threshold > 0 && balance <= threshold;
+          {/* Data List: Contextual Empty State OR Dual Presentation (Mobile Cards + Desktop Table) */}
+          {filteredStockSummary.length === 0 ? (
+            <EmptyState
+              hasFilters={hasActiveFilters}
+              onReset={handleResetFilters}
+              title={hasActiveFilters ? "No products match your filters" : "No products listed"}
+              description={
+                hasActiveFilters
+                  ? "Try adjusting your search keywords or category filters."
+                  : "No product catalog records have been created in the system yet."
+              }
+            />
+          ) : (
+            <>
+              {/* Mobile Card List (< md) */}
+              <div className="block md:hidden space-y-3">
+                {paginatedStockSummary.map((p) => {
+                  const balance = getProductStockBalance(p);
+                  const threshold = p.low_stock_threshold ?? 0;
+                  const isOutOfStock = balance <= 0;
+                  const isLowStock = threshold > 0 && balance <= threshold;
 
-                      return (
-                        <tr key={p.id} className="hover:bg-surface/50">
-                          <td className="py-2.5 px-3 font-mono font-bold text-foreground">
+                  return (
+                    <div
+                      key={p.id}
+                      className="rounded-lg border bg-card p-3.5 shadow-2xs space-y-2.5"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="font-mono text-xs font-bold text-brand-blue bg-brand-blue/10 px-2 py-0.5 rounded border border-brand-blue/20">
                             {p.code}
-                          </td>
-                          <td className="py-2.5 px-3 font-medium text-ink">
+                          </span>
+                          <h3 className="font-semibold text-sm text-foreground mt-1.5 leading-snug">
                             {p.name}
-                          </td>
-                          <td className="py-2.5 px-3 text-muted-foreground">
-                            {p.category?.name ?? "—"}
-                          </td>
-                          <td className="py-2.5 px-3 font-mono">
-                            {p.base_uom?.name} ({p.base_uom?.code})
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-bold text-foreground">
+                          </h3>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {p.category?.name ?? "—"} · Base: {p.base_uom?.name} ({p.base_uom?.code})
+                          </p>
+                        </div>
+                        <div>
+                          {isOutOfStock ? (
+                            <span className="inline-flex rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-semibold text-rose-800 shrink-0">
+                              Out of Stock
+                            </span>
+                          ) : isLowStock ? (
+                            <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-semibold text-amber-800 shrink-0">
+                              Low Stock
+                            </span>
+                          ) : (
+                            <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-800 shrink-0">
+                              Healthy
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 pt-2 border-t text-xs">
+                        <div>
+                          <span className="text-[10px] text-muted-foreground block">On-Hand Stock</span>
+                          <span className="font-mono text-sm font-bold text-foreground">
                             {formatQty(balance)} {p.base_uom?.code}
-                          </td>
-                          <td className="py-2.5 px-3 text-center">
-                            {isOutOfStock ? (
-                              <span className="inline-flex rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-800">
-                                Out of Stock
-                              </span>
-                            ) : isLowStock ? (
-                              <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
-                                Low Stock
-                              </span>
-                            ) : (
-                              <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
-                                Healthy
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-3 font-mono text-muted-foreground">
-                            {formatPhysicalSize(
-                              balance,
-                              p.paano_in_feet,
-                              p.base_uom?.code,
-                            ) ?? "—"}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-muted-foreground block">Physical Size</span>
+                          <span className="font-mono text-xs font-medium text-muted-foreground block truncate">
+                            {formatPhysicalSize(balance, p.paano_in_feet, p.base_uom?.code) ?? "—"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop Table (>= md) */}
+              <div className="hidden md:block overflow-hidden rounded-lg border bg-card shadow-2xs">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-surface border-b font-medium text-muted-foreground">
+                      <tr>
+                        <th className="py-2.5 px-3">Code</th>
+                        <th className="py-2.5 px-3">Product Name</th>
+                        <th className="py-2.5 px-3">Category</th>
+                        <th className="py-2.5 px-3">Base Unit</th>
+                        <th className="py-2.5 px-3 text-right">On-Hand Stock</th>
+                        <th className="py-2.5 px-3 text-center">Health Status</th>
+                        <th className="py-2.5 px-3">Remaining Physical Size</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {paginatedStockSummary.map((p) => {
+                        const balance = getProductStockBalance(p);
+                        const threshold = p.low_stock_threshold ?? 0;
+                        const isOutOfStock = balance <= 0;
+                        const isLowStock = threshold > 0 && balance <= threshold;
+
+                        return (
+                          <tr key={p.id} className="hover:bg-surface/50">
+                            <td className="py-2.5 px-3 font-mono font-bold text-foreground">
+                              {p.code}
+                            </td>
+                            <td className="py-2.5 px-3 font-medium text-ink">
+                              {p.name}
+                            </td>
+                            <td className="py-2.5 px-3 text-muted-foreground">
+                              {p.category?.name ?? "—"}
+                            </td>
+                            <td className="py-2.5 px-3 font-mono">
+                              {p.base_uom?.name} ({p.base_uom?.code})
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono font-bold text-foreground">
+                              {formatQty(balance)} {p.base_uom?.code}
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              {isOutOfStock ? (
+                                <span className="inline-flex rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-800">
+                                  Out of Stock
+                                </span>
+                              ) : isLowStock ? (
+                                <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                                  Low Stock
+                                </span>
+                              ) : (
+                                <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
+                                  Healthy
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 font-mono text-muted-foreground">
+                              {formatPhysicalSize(
+                                balance,
+                                p.paano_in_feet,
+                                p.base_uom?.code,
+                              ) ?? "—"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Pagination Bar */}
+              <PaginationBar
+                currentPage={safeCurrentPage}
+                totalPages={totalPages}
+                pageSize={pageSize}
+                totalItems={filteredStockSummary.length}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+                itemName="products"
+              />
+            </>
+          )}
         </div>
       )}
 
@@ -1145,21 +1431,10 @@ export default function ReportsPage() {
       {/* --------------------------------------------------------------------- */}
       {activeTab === "low-stock" && (
         <div className="space-y-4">
-          {/* Summary Metric Cards */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3.5 shadow-2xs">
-              <span className="text-xs font-semibold text-amber-900">
-                Total Low-Stock SKUs
-              </span>
-              <div className="mt-1 text-2xl font-bold font-mono text-amber-950">
-                {filteredLowStock.length}
-              </div>
-              <p className="mt-1 text-[11px] text-amber-800">
-                Items requiring replenishment or supplier reorder.
-              </p>
-            </div>
-
-            <div className="rounded-lg border border-rose-200 bg-rose-50/50 p-3.5 shadow-2xs">
+          {/* Summary Metric Cards: Out of Stock first on desktop, full-width top on mobile, other 2 cards in 2-cols */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {/* 1. Out of Stock (Zero Available) - First on Desktop, Full Width Top on Mobile */}
+            <div className="col-span-2 sm:col-span-1 rounded-lg border border-rose-200 bg-rose-50/50 p-3.5 shadow-2xs">
               <span className="text-xs font-semibold text-rose-900">
                 Out of Stock (Zero Available)
               </span>
@@ -1171,7 +1446,21 @@ export default function ReportsPage() {
               </p>
             </div>
 
-            <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-3.5 shadow-2xs">
+            {/* 2. Total Low-Stock SKUs - Left column on Mobile second row, Middle on Desktop */}
+            <div className="col-span-1 rounded-lg border border-amber-200 bg-amber-50/50 p-3.5 shadow-2xs">
+              <span className="text-xs font-semibold text-amber-900">
+                Total Low-Stock SKUs
+              </span>
+              <div className="mt-1 text-2xl font-bold font-mono text-amber-950">
+                {filteredLowStock.length}
+              </div>
+              <p className="mt-1 text-[11px] text-amber-800">
+                Items requiring replenishment.
+              </p>
+            </div>
+
+            {/* 3. Below Minimum Threshold - Right column on Mobile second row, Right on Desktop */}
+            <div className="col-span-1 rounded-lg border border-blue-200 bg-blue-50/50 p-3.5 shadow-2xs">
               <span className="text-xs font-semibold text-blue-900">
                 Below Minimum Threshold
               </span>
@@ -1183,83 +1472,155 @@ export default function ReportsPage() {
                 }
               </div>
               <p className="mt-1 text-[11px] text-blue-800">
-                Stock is at or below safe reorder safety buffer.
+                Safety buffer breached.
               </p>
             </div>
           </div>
 
-          {/* Table */}
-          <div className="overflow-hidden rounded-lg border bg-card shadow-2xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-surface border-b font-medium text-muted-foreground">
-                  <tr>
-                    <th className="py-2.5 px-3">Product Code</th>
-                    <th className="py-2.5 px-3">Product Name</th>
-                    <th className="py-2.5 px-3">Category</th>
-                    <th className="py-2.5 px-3 text-right">Current Stock</th>
-                    <th className="py-2.5 px-3 text-right">Min Threshold</th>
-                    <th className="py-2.5 px-3 text-right">Deficit / Reorder</th>
-                    <th className="py-2.5 px-3 text-center">Urgency</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filteredLowStock.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={7}
-                        className="py-8 text-center text-muted-foreground"
-                      >
-                        All inventory is currently above minimum thresholds. No
-                        reorders required!
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredLowStock.map((item) => (
-                      <tr
-                        key={item.product.id}
-                        className="hover:bg-surface/50"
-                      >
-                        <td className="py-2.5 px-3 font-mono font-bold text-foreground">
+          {/* Data List: Contextual Empty State OR Dual Presentation (Mobile Cards + Desktop Table) */}
+          {filteredLowStock.length === 0 ? (
+            <EmptyState
+              hasFilters={hasActiveFilters}
+              onReset={handleResetFilters}
+              allClear={!hasActiveFilters}
+              title={hasActiveFilters ? "No low-stock items match your filters" : "All Stock Healthy"}
+              description={
+                hasActiveFilters
+                  ? "Try resetting filters to inspect low-stock products across all categories."
+                  : "All inventory products are currently above their minimum reorder thresholds. No replenishment orders needed!"
+              }
+            />
+          ) : (
+            <>
+              {/* Mobile Card List (< md) */}
+              <div className="block md:hidden space-y-3">
+                {paginatedLowStock.map((item) => (
+                  <div
+                    key={item.product.id}
+                    className="rounded-lg border bg-card p-3.5 shadow-2xs space-y-2.5"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="font-mono text-xs font-bold text-brand-blue bg-brand-blue/10 px-2 py-0.5 rounded border border-brand-blue/20">
                           {item.product.code}
-                        </td>
-                        <td className="py-2.5 px-3 font-medium text-ink">
+                        </span>
+                        <h3 className="font-semibold text-sm text-foreground mt-1.5 leading-snug">
                           {item.product.name}
-                        </td>
-                        <td className="py-2.5 px-3 text-muted-foreground">
-                          {item.product.category?.name ?? "—"}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono font-bold text-foreground">
-                          {formatQty(item.balance)}{" "}
-                          {item.product.base_uom?.code}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">
-                          {formatQty(item.threshold)}{" "}
-                          {item.product.base_uom?.code}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono font-bold text-rose-700">
-                          {item.shortfall > 0
-                            ? `+ ${formatQty(item.shortfall)} ${item.product.base_uom?.code}`
-                            : "—"}
-                        </td>
-                        <td className="py-2.5 px-3 text-center">
-                          {item.isOutOfStock ? (
-                            <span className="inline-flex rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-800">
-                              Critical: Out of Stock
-                            </span>
-                          ) : (
-                            <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
-                              Warning: Low Stock
-                            </span>
-                          )}
-                        </td>
+                        </h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {item.product.category?.name ?? "—"} · Base: {item.product.base_uom?.code}
+                        </p>
+                      </div>
+                      <div>
+                        {item.isOutOfStock ? (
+                          <span className="inline-flex rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-semibold text-rose-800 shrink-0">
+                            Out of Stock
+                          </span>
+                        ) : (
+                          <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-semibold text-amber-800 shrink-0">
+                            Low Stock
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 pt-2 border-t text-xs">
+                      <div>
+                        <span className="text-[10px] text-muted-foreground block">Current</span>
+                        <span className="font-mono font-bold text-foreground">
+                          {formatQty(item.balance)} {item.product.base_uom?.code}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-muted-foreground block">Min Safe</span>
+                        <span className="font-mono text-muted-foreground">
+                          {formatQty(item.threshold)} {item.product.base_uom?.code}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-rose-700 block font-semibold">Deficit</span>
+                        <span className="font-mono font-bold text-rose-700">
+                          {item.shortfall > 0 ? `+${formatQty(item.shortfall)}` : "—"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop Table (>= md) */}
+              <div className="hidden md:block overflow-hidden rounded-lg border bg-card shadow-2xs">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-surface border-b font-medium text-muted-foreground">
+                      <tr>
+                        <th className="py-2.5 px-3">Product Code</th>
+                        <th className="py-2.5 px-3">Product Name</th>
+                        <th className="py-2.5 px-3">Category</th>
+                        <th className="py-2.5 px-3 text-right">Current Stock</th>
+                        <th className="py-2.5 px-3 text-right">Min Threshold</th>
+                        <th className="py-2.5 px-3 text-right">Deficit / Reorder</th>
+                        <th className="py-2.5 px-3 text-center">Urgency</th>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {paginatedLowStock.map((item) => (
+                        <tr
+                          key={item.product.id}
+                          className="hover:bg-surface/50"
+                        >
+                          <td className="py-2.5 px-3 font-mono font-bold text-foreground">
+                            {item.product.code}
+                          </td>
+                          <td className="py-2.5 px-3 font-medium text-ink">
+                            {item.product.name}
+                          </td>
+                          <td className="py-2.5 px-3 text-muted-foreground">
+                            {item.product.category?.name ?? "—"}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono font-bold text-foreground">
+                            {formatQty(item.balance)}{" "}
+                            {item.product.base_uom?.code}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">
+                            {formatQty(item.threshold)}{" "}
+                            {item.product.base_uom?.code}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono font-bold text-rose-700">
+                            {item.shortfall > 0
+                              ? `+ ${formatQty(item.shortfall)} ${item.product.base_uom?.code}`
+                              : "—"}
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            {item.isOutOfStock ? (
+                              <span className="inline-flex rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-800">
+                                Critical: Out of Stock
+                              </span>
+                            ) : (
+                              <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                                Warning: Low Stock
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Pagination Bar */}
+              <PaginationBar
+                currentPage={safeCurrentPage}
+                totalPages={totalPages}
+                pageSize={pageSize}
+                totalItems={filteredLowStock.length}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+                itemName="low-stock items"
+              />
+            </>
+          )}
         </div>
       )}
 
@@ -1319,108 +1680,207 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          {/* Table */}
-          <div className="overflow-hidden rounded-lg border bg-card shadow-2xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-surface border-b font-medium text-muted-foreground">
-                  <tr>
-                    <th className="py-2.5 px-3">Date & Time</th>
-                    <th className="py-2.5 px-3">Type</th>
-                    <th className="py-2.5 px-3">Product</th>
-                    <th className="py-2.5 px-3 text-right">Quantity Delta</th>
-                    <th className="py-2.5 px-3">Entered As</th>
-                    <th className="py-2.5 px-3 text-right">Balance After</th>
-                    <th className="py-2.5 px-3">Remarks / Reference</th>
-                    <th className="py-2.5 px-3">Performed By</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filteredMovements.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={8}
-                        className="py-8 text-center text-muted-foreground"
-                      >
-                        No stock ledger records found for this period.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredMovements.map((m) => {
-                      const isPositive = m.qty_delta > 0;
-                      return (
-                        <tr key={m.id} className="hover:bg-surface/50">
-                          <td className="py-2.5 px-3 font-mono text-muted-foreground whitespace-nowrap">
-                            {formatDateTime(m.created_at)}
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <span
-                              className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold ${
-                                m.movement_type === "add"
-                                  ? "bg-emerald-100 text-emerald-800"
-                                  : m.movement_type === "remove"
-                                    ? "bg-blue-100 text-blue-800"
-                                    : m.movement_type === "opening"
-                                      ? "bg-purple-100 text-purple-800"
-                                      : m.movement_type === "correction"
-                                        ? "bg-amber-100 text-amber-800"
-                                        : "bg-rose-100 text-rose-800"
-                              }`}
-                            >
-                              {m.movement_type === "add" && (
-                                <Plus className="h-3 w-3" />
-                              )}
-                              {m.movement_type === "remove" && (
-                                <Minus className="h-3 w-3" />
-                              )}
-                              {m.movement_type === "opening" && (
-                                <Sparkles className="h-3 w-3" />
-                              )}
-                              {m.movement_type === "correction" && (
-                                <SlidersHorizontal className="h-3 w-3" />
-                              )}
-                              {m.movement_type === "reversal" && (
-                                <RotateCcw className="h-3 w-3" />
-                              )}
-                              {m.movement_type.toUpperCase()}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <span className="font-mono font-bold text-foreground mr-1.5">
-                              {m.product?.code}
-                            </span>
-                            <span className="text-ink">{m.product?.name}</span>
-                          </td>
-                          <td
-                            className={`py-2.5 px-3 text-right font-mono font-bold ${
+          {/* Data List: Contextual Empty State OR Dual Presentation (Mobile Cards + Desktop Table) */}
+          {filteredMovements.length === 0 ? (
+            <EmptyState
+              hasFilters={hasActiveFilters}
+              onReset={handleResetFilters}
+              title={hasActiveFilters ? "No movement records match your filters" : "No movements logged"}
+              description={
+                hasActiveFilters
+                  ? "Try expanding your date range or clearing specific movement types."
+                  : "No inventory addition, removal, or adjustment transactions have been recorded yet."
+              }
+            />
+          ) : (
+            <>
+              {/* Mobile Card List (< md) */}
+              <div className="block md:hidden space-y-3">
+                {paginatedMovements.map((m) => {
+                  const isPositive = m.qty_delta > 0;
+                  return (
+                    <div
+                      key={m.id}
+                      className="rounded-lg border bg-card p-3.5 shadow-2xs space-y-2.5"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-mono text-muted-foreground">
+                          {formatDateTime(m.created_at)}
+                        </span>
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                            m.movement_type === "add"
+                              ? "bg-emerald-100 text-emerald-800"
+                              : m.movement_type === "remove"
+                                ? "bg-blue-100 text-blue-800"
+                                : m.movement_type === "opening"
+                                  ? "bg-slate-100 text-slate-800"
+                                  : m.movement_type === "correction"
+                                    ? "bg-amber-100 text-amber-800"
+                                    : "bg-purple-100 text-purple-800"
+                          }`}
+                        >
+                          {m.movement_type === "add" && <Plus className="h-3 w-3" />}
+                          {m.movement_type === "remove" && <Minus className="h-3 w-3" />}
+                          {m.movement_type === "opening" && <Sparkles className="h-3 w-3" />}
+                          {m.movement_type === "correction" && <SlidersHorizontal className="h-3 w-3" />}
+                          {m.movement_type === "reversal" && <RotateCcw className="h-3 w-3" />}
+                          {m.movement_type}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="font-mono text-xs font-bold text-foreground">
+                          {m.product?.code ?? "—"}
+                        </span>
+                        <p className="font-medium text-xs text-foreground mt-0.5">
+                          {m.product?.name ?? "—"}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 pt-2 border-t text-xs">
+                        <div>
+                          <span className="text-[10px] text-muted-foreground block">Qty Delta</span>
+                          <span
+                            className={`font-mono font-bold ${
                               isPositive ? "text-emerald-700" : "text-blue-700"
                             }`}
                           >
                             {isPositive ? "+" : ""}
-                            {formatQty(m.qty_delta)}{" "}
-                            {m.product?.base_uom?.code}
-                          </td>
-                          <td className="py-2.5 px-3 font-mono text-muted-foreground">
-                            {formatQty(m.entered_qty)} {m.entered_uom?.code}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-foreground">
-                            {formatQty(m.balance_after)}{" "}
-                            {m.product?.base_uom?.code}
-                          </td>
-                          <td className="py-2.5 px-3 text-muted-foreground truncate max-w-[180px]">
-                            {m.reference || "—"}
-                          </td>
-                          <td className="py-2.5 px-3 text-muted-foreground">
-                            {m.creator?.full_name || "—"}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                            {formatQty(m.qty_delta)} {m.product?.base_uom?.code}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-muted-foreground block">Entered As</span>
+                          <span className="font-mono text-muted-foreground">
+                            {formatQty(m.entered_qty)} {m.entered_uom?.code ?? "—"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-muted-foreground block">Balance After</span>
+                          <span className="font-mono font-bold text-foreground">
+                            {formatQty(m.balance_after)} {m.product?.base_uom?.code}
+                          </span>
+                        </div>
+                      </div>
+
+                      {(m.reference || m.creator?.full_name) && (
+                        <div className="pt-2 border-t flex items-center justify-between text-[11px] text-muted-foreground">
+                          <span className="truncate max-w-[200px]" title={m.reference ?? ""}>
+                            {m.reference ? `Ref: ${m.reference}` : "No reference"}
+                          </span>
+                          <span className="shrink-0">{m.creator?.full_name ?? "System"}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop Table (>= md) */}
+              <div className="hidden md:block overflow-hidden rounded-lg border bg-card shadow-2xs">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-surface border-b font-medium text-muted-foreground">
+                      <tr>
+                        <th className="py-2.5 px-3">Date & Time</th>
+                        <th className="py-2.5 px-3">Type</th>
+                        <th className="py-2.5 px-3">Product</th>
+                        <th className="py-2.5 px-3 text-right">Quantity Delta</th>
+                        <th className="py-2.5 px-3">Entered As</th>
+                        <th className="py-2.5 px-3 text-right">Balance After</th>
+                        <th className="py-2.5 px-3">Remarks / Reference</th>
+                        <th className="py-2.5 px-3">Performed By</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {paginatedMovements.map((m) => {
+                        const isPositive = m.qty_delta > 0;
+                        return (
+                          <tr key={m.id} className="hover:bg-surface/50">
+                            <td className="py-2.5 px-3 font-mono text-muted-foreground whitespace-nowrap">
+                              {formatDateTime(m.created_at)}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span
+                                className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold ${
+                                  m.movement_type === "add"
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : m.movement_type === "remove"
+                                      ? "bg-blue-100 text-blue-800"
+                                      : m.movement_type === "opening"
+                                        ? "bg-purple-100 text-purple-800"
+                                        : m.movement_type === "correction"
+                                          ? "bg-amber-100 text-amber-800"
+                                          : "bg-rose-100 text-rose-800"
+                                }`}
+                              >
+                                {m.movement_type === "add" && (
+                                  <Plus className="h-3 w-3" />
+                                )}
+                                {m.movement_type === "remove" && (
+                                  <Minus className="h-3 w-3" />
+                                )}
+                                {m.movement_type === "opening" && (
+                                  <Sparkles className="h-3 w-3" />
+                                )}
+                                {m.movement_type === "correction" && (
+                                  <SlidersHorizontal className="h-3 w-3" />
+                                )}
+                                {m.movement_type === "reversal" && (
+                                  <RotateCcw className="h-3 w-3" />
+                                )}
+                                {m.movement_type.toUpperCase()}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span className="font-mono font-bold text-foreground mr-1.5">
+                                {m.product?.code}
+                              </span>
+                              <span className="text-ink">{m.product?.name}</span>
+                            </td>
+                            <td
+                              className={`py-2.5 px-3 text-right font-mono font-bold ${
+                                isPositive ? "text-emerald-700" : "text-blue-700"
+                              }`}
+                            >
+                              {isPositive ? "+" : ""}
+                              {formatQty(m.qty_delta)}{" "}
+                              {m.product?.base_uom?.code}
+                            </td>
+                            <td className="py-2.5 px-3 font-mono text-muted-foreground">
+                              {formatQty(m.entered_qty)} {m.entered_uom?.code}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono text-foreground">
+                              {formatQty(m.balance_after)}{" "}
+                              {m.product?.base_uom?.code}
+                            </td>
+                            <td className="py-2.5 px-3 text-muted-foreground truncate max-w-[180px]">
+                              {m.reference || "—"}
+                            </td>
+                            <td className="py-2.5 px-3 text-muted-foreground">
+                              {m.creator?.full_name || "—"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Pagination Bar */}
+              <PaginationBar
+                currentPage={safeCurrentPage}
+                totalPages={totalPages}
+                pageSize={pageSize}
+                totalItems={filteredMovements.length}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+                itemName="movement records"
+              />
+            </>
+          )}
         </div>
       )}
 
@@ -1459,79 +1919,155 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          {/* Table */}
-          <div className="overflow-hidden rounded-lg border bg-card shadow-2xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-surface border-b font-medium text-muted-foreground">
-                  <tr>
-                    <th className="py-2.5 px-3">Roll Label</th>
-                    <th className="py-2.5 px-3">Product</th>
-                    <th className="py-2.5 px-3 text-right">Initial Measured</th>
-                    <th className="py-2.5 px-3 text-right">Remaining Stock</th>
-                    <th className="py-2.5 px-3">Remaining Physical Size</th>
-                    <th className="py-2.5 px-3 text-center">Roll Status</th>
-                    <th className="py-2.5 px-3">Date Added</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filteredRolls.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={7}
-                        className="py-8 text-center text-muted-foreground"
+          {/* Data List: Contextual Empty State OR Dual Presentation (Mobile Cards + Desktop Table) */}
+          {filteredRolls.length === 0 ? (
+            <EmptyState
+              hasFilters={hasActiveFilters}
+              onReset={handleResetFilters}
+              title={hasActiveFilters ? "No rolls match your filters" : "No roll inventory"}
+              description={
+                hasActiveFilters
+                  ? "Try adjusting your roll status filter or clearing your search."
+                  : "No individual roll-tracked products or stock rolls have been registered yet."
+              }
+            />
+          ) : (
+            <>
+              {/* Mobile Card List (< md) */}
+              <div className="block md:hidden space-y-3">
+                {paginatedRolls.map((r) => (
+                  <div
+                    key={r.id}
+                    className="rounded-lg border bg-card p-3.5 shadow-2xs space-y-2.5"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-xs font-bold text-brand-blue bg-brand-blue/10 px-2 py-0.5 rounded border border-brand-blue/20">
+                        {r.label}
+                      </span>
+                      <span
+                        className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
+                          r.status === "in_stock"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-slate-100 text-slate-600"
+                        }`}
                       >
-                        No roll records found matching your filters.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredRolls.map((r) => (
-                      <tr key={r.id} className="hover:bg-surface/50">
-                        <td className="py-2.5 px-3 font-mono font-bold text-foreground">
-                          {r.label}
-                        </td>
-                        <td className="py-2.5 px-3">
-                          <span className="font-mono font-semibold mr-1.5 text-foreground">
-                            {r.product?.code}
-                          </span>
-                          <span className="text-ink">{r.product?.name}</span>
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">
-                          {formatQty(r.initial_qty)}{" "}
-                          {r.product?.base_uom?.code}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono font-bold text-foreground">
+                        {r.status === "in_stock" ? "In Stock" : "Depleted"}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="font-mono text-xs font-semibold text-foreground">
+                        {r.product?.code}
+                      </span>
+                      <p className="font-medium text-xs text-foreground mt-0.5">
+                        {r.product?.name}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t text-xs">
+                      <div>
+                        <span className="text-[10px] text-muted-foreground block">Remaining / Initial</span>
+                        <span className="font-mono text-sm font-bold text-foreground">
                           {formatQty(r.remaining_qty)}{" "}
-                          {r.product?.base_uom?.code}
-                        </td>
-                        <td className="py-2.5 px-3 font-mono text-muted-foreground">
+                          <span className="text-xs text-muted-foreground font-normal">
+                            / {formatQty(r.initial_qty)} {r.product?.base_uom?.code}
+                          </span>
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-muted-foreground block">Remaining Size</span>
+                        <span className="font-mono text-xs text-muted-foreground truncate block">
                           {formatPhysicalSize(
                             r.remaining_qty,
                             r.product?.paano_in_feet,
                             r.product?.base_uom?.code,
                           ) ?? "—"}
-                        </td>
-                        <td className="py-2.5 px-3 text-center">
-                          {r.status === "in_stock" ? (
-                            <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
-                              In Stock
-                            </span>
-                          ) : (
-                            <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
-                              Depleted
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-3 font-mono text-muted-foreground">
-                          {formatDateTime(r.created_at)}
-                        </td>
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t flex justify-end text-[10px] text-muted-foreground font-mono">
+                      <span>Added: {formatDateTime(r.created_at)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop Table (>= md) */}
+              <div className="hidden md:block overflow-hidden rounded-lg border bg-card shadow-2xs">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-surface border-b font-medium text-muted-foreground">
+                      <tr>
+                        <th className="py-2.5 px-3">Roll Label</th>
+                        <th className="py-2.5 px-3">Product</th>
+                        <th className="py-2.5 px-3 text-right">Initial Measured</th>
+                        <th className="py-2.5 px-3 text-right">Remaining Stock</th>
+                        <th className="py-2.5 px-3">Remaining Physical Size</th>
+                        <th className="py-2.5 px-3 text-center">Roll Status</th>
+                        <th className="py-2.5 px-3">Date Added</th>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {paginatedRolls.map((r) => (
+                        <tr key={r.id} className="hover:bg-surface/50">
+                          <td className="py-2.5 px-3 font-mono font-bold text-foreground">
+                            {r.label}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span className="font-mono font-semibold mr-1.5 text-foreground">
+                              {r.product?.code}
+                            </span>
+                            <span className="text-ink">{r.product?.name}</span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">
+                            {formatQty(r.initial_qty)}{" "}
+                            {r.product?.base_uom?.code}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono font-bold text-foreground">
+                            {formatQty(r.remaining_qty)}{" "}
+                            {r.product?.base_uom?.code}
+                          </td>
+                          <td className="py-2.5 px-3 font-mono text-muted-foreground">
+                            {formatPhysicalSize(
+                              r.remaining_qty,
+                              r.product?.paano_in_feet,
+                              r.product?.base_uom?.code,
+                            ) ?? "—"}
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            {r.status === "in_stock" ? (
+                              <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
+                                In Stock
+                              </span>
+                            ) : (
+                              <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                                Depleted
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 font-mono text-muted-foreground">
+                            {formatDateTime(r.created_at)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Pagination Bar */}
+              <PaginationBar
+                currentPage={safeCurrentPage}
+                totalPages={totalPages}
+                pageSize={pageSize}
+                totalItems={filteredRolls.length}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+                itemName="rolls"
+              />
+            </>
+          )}
         </div>
       )}
 
@@ -1623,95 +2159,168 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          {/* Table */}
-          <div className="overflow-hidden rounded-lg border bg-card shadow-2xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-surface border-b font-medium text-muted-foreground">
-                  <tr>
-                    <th className="py-2.5 px-3">Date & Time</th>
-                    <th className="py-2.5 px-3">Product</th>
-                    <th className="py-2.5 px-3">Type</th>
-                    <th className="py-2.5 px-3 text-center">Bill Status</th>
-                    <th className="py-2.5 px-3">Bill Ref / Notes</th>
-                    <th className="py-2.5 px-3 text-right">Quantity Delta</th>
-                    <th className="py-2.5 px-3">Performed By</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filteredBillMovements.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={7}
-                        className="py-8 text-center text-muted-foreground"
+          {/* Data List: Contextual Empty State OR Dual Presentation (Mobile Cards + Desktop Table) */}
+          {filteredBillMovements.length === 0 ? (
+            <EmptyState
+              hasFilters={hasActiveFilters}
+              onReset={handleResetFilters}
+              title={hasActiveFilters ? "No movements match your bill status filters" : "No billed movements"}
+              description={
+                hasActiveFilters
+                  ? "Try expanding your date range or selecting 'All Bill Statuses'."
+                  : "No stock movements with bill status tagging have been recorded yet."
+              }
+            />
+          ) : (
+            <>
+              {/* Mobile Card List (< md) */}
+              <div className="block md:hidden space-y-3">
+                {paginatedBillMovements.map((m) => (
+                  <div
+                    key={m.id}
+                    className="rounded-lg border bg-card p-3.5 shadow-2xs space-y-2.5"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-mono text-muted-foreground">
+                        {formatDateTime(m.created_at)}
+                      </span>
+                      <span
+                        className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${
+                          m.bill_status === "with_bill"
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                            : "bg-slate-100 text-slate-700 border-slate-300"
+                        }`}
                       >
-                        No movements with bill status found for this period.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredBillMovements.map((m) => {
-                      const isPositive = m.qty_delta > 0;
-                      return (
-                        <tr key={m.id} className="hover:bg-surface/50">
-                          <td className="py-2.5 px-3 font-mono text-muted-foreground whitespace-nowrap">
-                            {formatDateTime(m.created_at)}
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <span className="font-mono font-bold text-foreground mr-1.5">
-                              {m.product?.code}
-                            </span>
-                            <span className="text-ink">{m.product?.name}</span>
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <span
-                              className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold ${
-                                m.movement_type === "add"
-                                  ? "bg-emerald-100 text-emerald-800"
-                                  : "bg-blue-100 text-blue-800"
+                        {m.bill_status === "with_bill" ? "With Bill" : "Without Bill"}
+                      </span>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-foreground">
+                        <span>{m.product?.code ?? "—"}</span>
+                        <span className="uppercase text-[10px] px-1.5 py-0.2 rounded bg-muted text-muted-foreground font-sans">
+                          {m.movement_type}
+                        </span>
+                      </div>
+                      <p className="font-medium text-xs text-foreground mt-0.5">
+                        {m.product?.name ?? "—"}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t text-xs">
+                      <div>
+                        <span className="text-[10px] text-muted-foreground block">Quantity Delta</span>
+                        <span className="font-mono text-sm font-bold text-foreground">
+                          {m.qty_delta > 0 ? "+" : ""}
+                          {formatQty(m.qty_delta)} {m.product?.base_uom?.code}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-muted-foreground block">Bill Reference</span>
+                        <span className="font-mono text-xs text-foreground truncate block">
+                          {m.reference ? m.reference : "—"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t flex justify-end text-[10px] text-muted-foreground">
+                      <span>Logged by: {m.creator?.full_name ?? "System"}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop Table (>= md) */}
+              <div className="hidden md:block overflow-hidden rounded-lg border bg-card shadow-2xs">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-surface border-b font-medium text-muted-foreground">
+                      <tr>
+                        <th className="py-2.5 px-3">Date & Time</th>
+                        <th className="py-2.5 px-3">Product</th>
+                        <th className="py-2.5 px-3">Type</th>
+                        <th className="py-2.5 px-3 text-center">Bill Status</th>
+                        <th className="py-2.5 px-3">Bill Ref / Notes</th>
+                        <th className="py-2.5 px-3 text-right">Quantity Delta</th>
+                        <th className="py-2.5 px-3">Performed By</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {paginatedBillMovements.map((m) => {
+                        const isPositive = m.qty_delta > 0;
+                        return (
+                          <tr key={m.id} className="hover:bg-surface/50">
+                            <td className="py-2.5 px-3 font-mono text-muted-foreground whitespace-nowrap">
+                              {formatDateTime(m.created_at)}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span className="font-mono font-bold text-foreground mr-1.5">
+                                {m.product?.code}
+                              </span>
+                              <span className="text-ink">{m.product?.name}</span>
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span
+                                className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold ${
+                                  m.movement_type === "add"
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : "bg-blue-100 text-blue-800"
+                                }`}
+                              >
+                                {m.movement_type === "add" ? (
+                                  <ArrowDownRight className="h-3 w-3" />
+                                ) : (
+                                  <ArrowUpRight className="h-3 w-3" />
+                                )}
+                                {m.movement_type.toUpperCase()}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              {m.bill_status === "with_bill" ? (
+                                <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-bold text-emerald-900 border border-emerald-300">
+                                  With Bill
+                                </span>
+                              ) : (
+                                <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-semibold text-slate-800 border border-slate-300">
+                                  Without Bill
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 text-muted-foreground truncate max-w-[180px]">
+                              {m.reference || "—"}
+                            </td>
+                            <td
+                              className={`py-2.5 px-3 text-right font-mono font-bold ${
+                                isPositive ? "text-emerald-700" : "text-blue-700"
                               }`}
                             >
-                              {m.movement_type === "add" ? (
-                                <ArrowDownRight className="h-3 w-3" />
-                              ) : (
-                                <ArrowUpRight className="h-3 w-3" />
-                              )}
-                              {m.movement_type.toUpperCase()}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 text-center">
-                            {m.bill_status === "with_bill" ? (
-                              <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-bold text-emerald-900 border border-emerald-300">
-                                With Bill
-                              </span>
-                            ) : (
-                              <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-semibold text-slate-800 border border-slate-300">
-                                Without Bill
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-3 text-muted-foreground truncate max-w-[180px]">
-                            {m.reference || "—"}
-                          </td>
-                          <td
-                            className={`py-2.5 px-3 text-right font-mono font-bold ${
-                              isPositive ? "text-emerald-700" : "text-blue-700"
-                            }`}
-                          >
-                            {isPositive ? "+" : ""}
-                            {formatQty(m.qty_delta)}{" "}
-                            {m.product?.base_uom?.code}
-                          </td>
-                          <td className="py-2.5 px-3 text-muted-foreground">
-                            {m.creator?.full_name || "—"}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                              {isPositive ? "+" : ""}
+                              {formatQty(m.qty_delta)}{" "}
+                              {m.product?.base_uom?.code}
+                            </td>
+                            <td className="py-2.5 px-3 text-muted-foreground">
+                              {m.creator?.full_name || "—"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Pagination Bar */}
+              <PaginationBar
+                currentPage={safeCurrentPage}
+                totalPages={totalPages}
+                pageSize={pageSize}
+                totalItems={filteredBillMovements.length}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+                itemName="movements"
+              />
+            </>
+          )}
         </div>
       )}
     </div>
