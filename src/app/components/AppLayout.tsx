@@ -12,6 +12,7 @@ import {
   Menu,
   X,
   ChevronRight,
+  Smartphone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/app/lib/auth";
@@ -38,6 +39,52 @@ export default function AppLayout() {
   const { profile, session, isSuperUser, signOut } = useAuth();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<{
+    prompt: () => Promise<void>;
+    userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+  } | null>(null);
+  const [isStandalone, setIsStandalone] = useState(false);
+
+  // Check standalone mode and capture PWA install prompt
+  useEffect(() => {
+    const isStandaloneMode =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as unknown as { standalone?: boolean }).standalone === true;
+    setIsStandalone(isStandaloneMode);
+
+    const handleBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(
+        e as unknown as {
+          prompt: () => Promise<void>;
+          userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+        }
+      );
+    };
+
+    const handleAppInstalled = () => {
+      setInstallPrompt(null);
+      setIsStandalone(true);
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstall);
+    window.addEventListener("appinstalled", handleAppInstalled);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
+      window.removeEventListener("appinstalled", handleAppInstalled);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    const choice = await installPrompt.userChoice;
+    if (choice.outcome === "accepted") {
+      setInstallPrompt(null);
+      setIsStandalone(true);
+    }
+  };
 
   // Close mobile drawer on route change
   useEffect(() => {
@@ -283,22 +330,22 @@ export default function AppLayout() {
             aria-hidden="true"
           />
 
-          {/* Drawer Panel */}
-          <div className="relative w-full max-w-xs bg-background h-full shadow-2xl flex flex-col z-10 animate-in slide-in-from-right duration-250 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+          {/* Drawer Panel — 65% screen width (compact standard mobile drawer) */}
+          <div className="relative w-[65vw] max-w-[280px] min-w-[240px] bg-background h-full shadow-2xl flex flex-col z-10 animate-in slide-in-from-right duration-250 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
             {/* Drawer Header */}
-            <div className="flex items-center justify-between border-b p-4">
+            <div className="flex items-center justify-between border-b px-3.5 py-3">
               <div className="flex items-center gap-2">
                 <img
                   src="/logo-icon.png"
                   alt="Shibaam Enterprises"
-                  className="h-7 w-7 object-contain rounded-md"
+                  className="h-6 w-6 object-contain rounded-md"
                 />
-                <span className="font-bold text-sm tracking-tight">Navigation</span>
+                <span className="font-bold text-xs tracking-tight">Navigation</span>
               </div>
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 w-8 p-0"
+                className="h-7 w-7 p-0"
                 onClick={() => setMobileMenuOpen(false)}
                 aria-label="Close menu"
               >
@@ -307,16 +354,16 @@ export default function AppLayout() {
             </div>
 
             {/* User Account Summary Card */}
-            <div className="p-4 border-b bg-surface/50">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-blue/10 text-brand-blue font-bold text-sm border border-brand-blue/20">
+            <div className="px-3.5 py-3 border-b bg-surface/50">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-blue/10 text-brand-blue font-bold text-xs border border-brand-blue/20">
                   {profile?.full_name?.charAt(0).toUpperCase() || "U"}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-xs text-foreground truncate">
+                  <p className="font-semibold text-xs text-foreground truncate leading-tight">
                     {profile?.full_name || "Signed in"}
                   </p>
-                  <p className="text-[11px] text-muted-foreground truncate">
+                  <p className="text-[10px] text-muted-foreground truncate leading-tight">
                     {session?.user?.email || ""}
                   </p>
                   <span
@@ -359,8 +406,22 @@ export default function AppLayout() {
               ))}
             </div>
 
+            {/* Install PWA Prompt (Only if installable & not already installed) */}
+            {installPrompt && !isStandalone && (
+              <div className="p-3 border-t bg-brand-blue/5">
+                <Button
+                  variant="outline"
+                  className="w-full text-xs font-semibold gap-2 border-brand-blue/30 text-brand-blue hover:bg-brand-blue hover:text-white"
+                  onClick={handleInstallClick}
+                >
+                  <Smartphone className="h-4 w-4" />
+                  <span>Install Shibaam App</span>
+                </Button>
+              </div>
+            )}
+
             {/* Drawer Footer with Sign Out */}
-            <div className="p-4 border-t bg-surface/30">
+            <div className="p-3 border-t bg-surface/30">
               <Button
                 variant="outline"
                 className="w-full text-xs gap-2 text-destructive hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
