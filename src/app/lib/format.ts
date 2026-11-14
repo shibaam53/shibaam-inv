@@ -344,7 +344,10 @@ export function formatPaano(
   inFeet?: number | string | null | undefined,
 ): string {
   if (value == null || value === "") return "—";
-  const u = (unit || "ft").trim();
+  let u = (unit || "ft").trim();
+  if (u.toLowerCase() === "m") {
+    u = "mtr";
+  }
   const valStr = formatQty(value);
 
   if (u.toLowerCase() === "ft" || inFeet == null) {

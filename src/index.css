@@ -61,7 +61,11 @@
     scrollbar-width: thin;
     scrollbar-color: rgba(91, 102, 117, 0.25) transparent;
   }
-  body { @apply bg-background text-foreground font-sans antialiased; }
+  html, body {
+    @apply bg-background text-foreground font-sans antialiased;
+    overflow-x: clip;
+    max-width: 100vw;
+  }
 
   /* Sleek modern custom scrollbar for Webkit/Blink */
   ::-webkit-scrollbar {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -103,6 +103,47 @@ export default function AppLayout() {
     };
   }, [mobileMenuOpen]);
 
+  // Auto-hide mobile header when scrolling down; reveal when scrolling up
+  const [isHeaderVisible, setIsHeaderVisible] = useState(true);
+  const lastScrollY = useRef(0);
+
+  useEffect(() => {
+    let ticking = false;
+
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const currentY =
+            window.pageYOffset ||
+            window.scrollY ||
+            document.documentElement.scrollTop ||
+            document.body.scrollTop ||
+            0;
+
+          // Apply hide/show behavior on mobile viewports (< 768px)
+          if (window.innerWidth < 768) {
+            if (currentY > lastScrollY.current + 6 && currentY > 40) {
+              // Scrolling down past 40px -> hide header to maximize screen space
+              setIsHeaderVisible(false);
+            } else if (currentY < lastScrollY.current - 6 || currentY <= 40) {
+              // Scrolling up or at the top -> reveal header immediately
+              setIsHeaderVisible(true);
+            }
+          } else {
+            // Desktop is always visible and sticky
+            setIsHeaderVisible(true);
+          }
+          lastScrollY.current = Math.max(0, currentY);
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   const visibleLinks = navLinks.filter((l) => !l.superOnly || isSuperUser);
 
   // Bottom navigation primary items (up to 4 items + "More" menu button)
@@ -119,13 +160,18 @@ export default function AppLayout() {
     location.pathname.startsWith("/app/settings");
 
   return (
-    <div className="flex min-h-svh flex-col bg-secondary">
+    <div className="flex min-h-svh w-full max-w-full flex-col bg-secondary">
       {/* =====================================================================
-          HEADER (Desktop & Mobile)
+          HEADER (Auto-hides on Mobile scroll-down for maximum space; Sticky on Desktop)
           ===================================================================== */}
-      <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur-md pt-[env(safe-area-inset-top)] shadow-2xs">
+      <header
+        className={cn(
+          "sticky top-0 z-30 border-b bg-background/95 backdrop-blur-md pt-[env(safe-area-inset-top)] shadow-2xs transition-transform duration-300 md:translate-y-0",
+          isHeaderVisible ? "translate-y-0" : "-translate-y-full md:translate-y-0",
+        )}
+      >
         {/* Top Header Row */}
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2.5">
           {/* Brand Logo & Name */}
           <NavLink to="/app/dashboard" className="flex items-center gap-2.5 group">
             <img
@@ -202,7 +248,7 @@ export default function AppLayout() {
 
         {/* Desktop Navigation Tabs with Animated Underline Effect (Hidden on Mobile) */}
         <nav aria-label="Main Navigation" className="hidden md:block border-t border-border/60 bg-background/60">
-          <div className="mx-auto max-w-6xl px-4">
+          <div className="mx-auto max-w-7xl px-4">
             <ul className="flex items-center gap-1 sm:gap-2">
               {visibleLinks.map((l) => (
                 <li key={l.to}>
@@ -248,15 +294,15 @@ export default function AppLayout() {
       {/* =====================================================================
           MAIN BODY CONTENT
           ===================================================================== */}
-      <main className="mx-auto max-w-6xl min-w-0 w-full flex-1 p-3.5 sm:p-4 pb-20 md:pb-8">
+      <main className="mx-auto max-w-7xl min-w-0 w-full flex-1 p-3.5 sm:p-4 pb-20 md:pb-8">
         <Outlet />
       </main>
 
       {/* =====================================================================
-          GLOBAL FOOTER (Desktop & Mobile)
+          GLOBAL FOOTER (Desktop Only — on mobile it lives inside Drawer)
           ===================================================================== */}
-      <footer className="border-t border-border/60 bg-card/60 text-muted-foreground py-3.5 px-4 text-xs pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-4">
-        <div className="mx-auto flex max-w-6xl flex-col sm:flex-row items-center justify-between gap-2 text-center sm:text-left">
+      <footer className="hidden md:block border-t border-border/60 bg-card/60 text-muted-foreground py-3.5 px-4 text-xs">
+        <div className="mx-auto flex max-w-7xl flex-col sm:flex-row items-center justify-between gap-2 text-center sm:text-left">
           <div className="text-[11px] sm:text-xs">
             &copy; {new Date().getFullYear()} Shibaam Enterprises.
           </div>
@@ -420,8 +466,8 @@ export default function AppLayout() {
               </div>
             )}
 
-            {/* Drawer Footer with Sign Out */}
-            <div className="p-3 border-t bg-surface/30">
+            {/* Drawer Footer with Sign Out & Attribution */}
+            <div className="p-3 border-t bg-surface/30 space-y-2">
               <Button
                 variant="outline"
                 className="w-full text-xs gap-2 text-destructive hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
@@ -430,6 +476,20 @@ export default function AppLayout() {
                 <LogOut className="h-4 w-4" />
                 <span>Sign out</span>
               </Button>
+              <div className="pt-1.5 text-center text-[10px] text-muted-foreground space-y-0.5">
+                <div>&copy; {new Date().getFullYear()} Shibaam Enterprises.</div>
+                <div>
+                  Created by{" "}
+                  <a
+                    href="https://hmcreations53.vercel.app/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-bold text-brand-blue hover:underline"
+                  >
+                    HMCREATIONS53
+                  </a>
+                </div>
+              </div>
             </div>
           </div>
         </div>

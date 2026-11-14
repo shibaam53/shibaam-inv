@@ -21,7 +21,14 @@ import {
   Loader2,
   RefreshCw,
   X,
+  ArrowDownRight,
+  ArrowUpRight,
+  RotateCcw,
+  Sparkles,
+  SearchX,
+  PackageOpen,
 } from "lucide-react";
+import { PaginationBar } from "@/app/components/PaginationBar";
 import Decimal from "decimal.js";
 import { supabase } from "@/app/lib/supabase";
 import {
@@ -32,6 +39,7 @@ import {
 } from "@/app/lib/format";
 import { useInventory, type InventoryRow } from "@/app/lib/useInventory";
 import type { Database, Json } from "@/types/database";
+import { cn } from "@/lib/utils";
 
 const STATUS_LABEL = {
   healthy: "Healthy",
@@ -40,9 +48,11 @@ const STATUS_LABEL = {
 } as const;
 
 const STATUS_STYLE = {
-  healthy: "bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800",
+  healthy:
+    "bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800",
   low: "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800",
-  out_of_stock: "bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800",
+  out_of_stock:
+    "bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800",
 } as const;
 
 type RollRecord = Database["public"]["Tables"]["stock_rolls"]["Row"];
@@ -102,11 +112,27 @@ export default function InventoryPage() {
     Record<string, ExpandedProductDetails>
   >({});
 
+  // Status counts for quick filter chips
+  const counts = useMemo(() => {
+    if (state.status !== "ready") {
+      return { all: 0, healthy: 0, low: 0, out_of_stock: 0, roll: 0 };
+    }
+    return {
+      all: state.rows.length,
+      healthy: state.rows.filter((r) => r.stock_status === "healthy").length,
+      low: state.rows.filter((r) => r.stock_status === "low").length,
+      out_of_stock: state.rows.filter((r) => r.stock_status === "out_of_stock").length,
+      roll: state.rows.filter((r) => r.tracking_mode === "roll").length,
+    };
+  }, [state]);
+
   // Filter products based on search query across Code, Name, Category, Gauge, Tracking, and status filter
   const rows = useMemo(() => {
     if (state.status !== "ready") return [];
     let list = state.rows;
-    if (statusFilter !== "all") {
+    if (statusFilter === "roll") {
+      list = list.filter((r) => r.tracking_mode === "roll");
+    } else if (statusFilter !== "all") {
       list = list.filter((r) => r.stock_status === statusFilter);
     }
     const q = query.trim().toLowerCase();
@@ -123,6 +149,49 @@ export default function InventoryPage() {
       ].some((v) => v.toLowerCase().includes(q)),
     );
   }, [state, query, statusFilter]);
+
+  // Pagination state: 25 items by default on desktop, 10 on mobile
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(() =>
+    typeof window !== "undefined" && window.innerWidth >= 768 ? 25 : 10,
+  );
+
+  // Reset to page 1 on search or filter change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [query, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+
+  const paginatedRows = useMemo(() => {
+    const start = (safeCurrentPage - 1) * pageSize;
+    return rows.slice(start, start + pageSize);
+  }, [rows, safeCurrentPage, pageSize]);
+
+  const statusFilterLabel = useMemo(() => {
+    if (statusFilter === "healthy") return "Healthy";
+    if (statusFilter === "low") return "Low Stock";
+    if (statusFilter === "out_of_stock") return "Out of Stock";
+    if (statusFilter === "roll") return "Roll-Tracked";
+    return statusFilter;
+  }, [statusFilter]);
+
+  const handleStatusFilterChange = (filter: string) => {
+    setStatusFilter(filter);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (filter === "all") {
+          next.delete("status");
+        } else {
+          next.set("status", filter);
+        }
+        return next;
+      },
+      { replace: true },
+    );
+  };
 
   // Load details on-demand when a product row is expanded
   const loadProductDetails = async (
@@ -146,21 +215,19 @@ export default function InventoryPage() {
           .select(
             `
             id, description, specs,
-            category:categories(id, name),
-            base_uom:uoms!products_base_uom_id_fkey(id, code, name),
             swg:swg_reference(gauge, diameter_mm),
             perforation:product_perforation(hole_diameter_mm, pitch_mm),
             product_uoms(uom_id, requires_measurement, uom:uoms(id, code, name))
           `,
           )
           .eq("id", pId)
-          .maybeSingle(),
+          .single(),
         trackingMode === "roll"
           ? supabase
               .from("stock_rolls")
               .select("*")
               .eq("product_id", pId)
-              .order("label", { ascending: true })
+              .order("created_at", { ascending: false })
           : Promise.resolve({ data: [] as RollRecord[], error: null }),
         supabase
           .from("stock_movements")
@@ -215,7 +282,6 @@ export default function InventoryPage() {
         next.delete(productId);
       } else {
         next.add(productId);
-        // Only fetch if not already in cache or previously had error
         if (!expandedData[productId] || expandedData[productId].error) {
           void loadProductDetails(productId, trackingMode);
         }
@@ -225,12 +291,12 @@ export default function InventoryPage() {
   };
 
   return (
-    <Card className="min-w-0">
-      <CardHeader>
+    <Card id="inventory-top" className="min-w-0 w-full overflow-hidden">
+      <CardHeader className="p-3.5 sm:p-6 pb-3 border-b">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <CardTitle>Inventory Overview</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-base sm:text-lg">Inventory Overview</CardTitle>
+            <CardDescription className="text-xs">
               Authoritative on-hand stock balances, physical sizes, and roll tracking.
             </CardDescription>
           </div>
@@ -242,55 +308,115 @@ export default function InventoryPage() {
         </div>
       </CardHeader>
 
-      <CardContent className="grid gap-4 min-w-0">
-        {/* Search bar */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2 max-w-md w-full relative">
-            <Search className="absolute left-3 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <Input
-              id="search"
-              placeholder="Search by code, name, category, gauge, tracking…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="pl-9 text-xs"
-            />
-            {query && (
-              <button
-                onClick={() => setQuery("")}
-                className="absolute right-2.5 text-xs text-muted-foreground hover:text-foreground"
-              >
-                Clear
-              </button>
-            )}
+      <CardContent className="p-3.5 sm:p-6 grid gap-3 sm:gap-4 min-w-0">
+        {/* Quick Status Filter Chips */}
+        {state.status === "ready" && (
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+            <button
+              type="button"
+              onClick={() => handleStatusFilterChange("all")}
+              className={cn(
+                "px-3 py-1.5 rounded-full font-medium transition-colors shrink-0",
+                statusFilter === "all"
+                  ? "bg-brand-blue text-white font-bold shadow-2xs"
+                  : "bg-surface hover:bg-muted text-foreground border"
+              )}
+            >
+              All ({counts.all})
+            </button>
+            <button
+              type="button"
+              onClick={() => handleStatusFilterChange("healthy")}
+              className={cn(
+                "px-3 py-1.5 rounded-full font-medium transition-colors shrink-0",
+                statusFilter === "healthy"
+                  ? "bg-emerald-600 text-white font-bold shadow-2xs"
+                  : "bg-surface hover:bg-muted text-foreground border"
+              )}
+            >
+              Healthy ({counts.healthy})
+            </button>
+            <button
+              type="button"
+              onClick={() => handleStatusFilterChange("low")}
+              className={cn(
+                "px-3 py-1.5 rounded-full font-medium transition-colors shrink-0 flex items-center gap-1.5",
+                statusFilter === "low"
+                  ? "bg-amber-600 text-white font-bold shadow-2xs"
+                  : "bg-surface hover:bg-muted text-foreground border"
+              )}
+            >
+              <span>Low Stock</span>
+              {counts.low > 0 && (
+                <span
+                  className={cn(
+                    "px-1.5 py-0.2 rounded-full text-[10px] font-mono",
+                    statusFilter === "low"
+                      ? "bg-white/20 text-white"
+                      : "bg-amber-100 text-amber-900"
+                  )}
+                >
+                  {counts.low}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleStatusFilterChange("out_of_stock")}
+              className={cn(
+                "px-3 py-1.5 rounded-full font-medium transition-colors shrink-0 flex items-center gap-1.5",
+                statusFilter === "out_of_stock"
+                  ? "bg-rose-600 text-white font-bold shadow-2xs"
+                  : "bg-surface hover:bg-muted text-foreground border"
+              )}
+            >
+              <span>Out of Stock</span>
+              {counts.out_of_stock > 0 && (
+                <span
+                  className={cn(
+                    "px-1.5 py-0.2 rounded-full text-[10px] font-mono",
+                    statusFilter === "out_of_stock"
+                      ? "bg-white/20 text-white"
+                      : "bg-rose-100 text-rose-900"
+                  )}
+                >
+                  {counts.out_of_stock}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleStatusFilterChange("roll")}
+              className={cn(
+                "px-3 py-1.5 rounded-full font-medium transition-colors shrink-0",
+                statusFilter === "roll"
+                  ? "bg-purple-700 text-white font-bold shadow-2xs"
+                  : "bg-surface hover:bg-muted text-foreground border"
+              )}
+            >
+              Roll-Tracked ({counts.roll})
+            </button>
           </div>
+        )}
 
-          {statusFilter !== "all" && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 text-amber-900 border border-amber-300 px-2.5 py-1 text-xs font-medium">
-              <span>
-                Status:{" "}
-                <strong className="capitalize">
-                  {statusFilter.replace(/_/g, " ")}
-                </strong>
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  setStatusFilter("all");
-                  setSearchParams(
-                    (prev) => {
-                      const next = new URLSearchParams(prev);
-                      next.delete("status");
-                      return next;
-                    },
-                    { replace: true },
-                  );
-                }}
-                className="hover:text-amber-700"
-                title="Clear filter"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </span>
+        {/* Search bar */}
+        <div className="flex items-center gap-2 max-w-md w-full relative">
+          <Search className="absolute left-3 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            id="search"
+            placeholder="Search by code, name, category, gauge, tracking…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="pl-9 h-11 sm:h-9 text-xs"
+          />
+          {query && (
+            <button
+              onClick={() => setQuery("")}
+              className="absolute right-3 text-xs text-muted-foreground hover:text-foreground p-1"
+              aria-label="Clear search"
+            >
+              <X className="h-4 w-4" />
+            </button>
           )}
         </div>
 
@@ -311,17 +437,114 @@ export default function InventoryPage() {
           </div>
         )}
 
+        {/* Contextual Empty State */}
         {state.status === "ready" && rows.length === 0 && (
-          <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-            {state.rows.length === 0
-              ? "No products registered in the inventory yet."
-              : `No products match "${query}".`}
+          <div className="rounded-xl border border-dashed p-8 sm:p-10 text-center space-y-3 bg-surface/30">
+            {state.rows.length === 0 ? (
+              // 1. Entire catalog is empty
+              <div className="space-y-2 max-w-sm mx-auto">
+                <div className="inline-flex p-3 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 border">
+                  <PackageOpen className="h-6 w-6" />
+                </div>
+                <h3 className="text-sm font-bold text-foreground">
+                  Inventory Catalog Empty
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  No products have been registered in the catalog yet.
+                </p>
+              </div>
+            ) : query.trim() && statusFilter !== "all" ? (
+              // 2. Both search query and filter chip are active
+              <div className="space-y-3 max-w-sm mx-auto">
+                <div className="inline-flex p-3 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-600 border border-amber-200">
+                  <SearchX className="h-6 w-6" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-bold text-foreground">
+                    No Matching {statusFilterLabel} Products
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    No items in &quot;{statusFilterLabel}&quot; status matched &quot;{query}&quot;.
+                  </p>
+                </div>
+                <div className="flex items-center justify-center gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs"
+                    onClick={() => setQuery("")}
+                  >
+                    Clear Search
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs text-brand-blue border-brand-blue/30"
+                    onClick={() => handleStatusFilterChange("all")}
+                  >
+                    View All Statuses
+                  </Button>
+                </div>
+              </div>
+            ) : query.trim() ? (
+              // 3. Search query active
+              <div className="space-y-3 max-w-sm mx-auto">
+                <div className="inline-flex p-3 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 border">
+                  <SearchX className="h-6 w-6" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-bold text-foreground">
+                    No Products Found
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    No items matched &quot;{query}&quot;. Check your spelling or try searching by category or gauge.
+                  </p>
+                </div>
+                <div className="pt-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs"
+                    onClick={() => setQuery("")}
+                  >
+                    Clear Search
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              // 4. Filter chip active with 0 results (e.g. Healthy (0) or Low Stock (0))
+              <div className="space-y-3 max-w-sm mx-auto">
+                <div className="inline-flex p-3 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 border">
+                  <PackageOpen className="h-6 w-6" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-bold text-foreground">
+                    No {statusFilterLabel} Products
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    There are currently no products with &quot;{statusFilterLabel}&quot; stock status in your inventory.
+                  </p>
+                </div>
+                <div className="pt-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs text-brand-blue border-brand-blue/30"
+                    onClick={() => handleStatusFilterChange("all")}
+                  >
+                    View All Products ({state.rows.length})
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Main Inventory Table */}
+        {/* ===================================================================
+            DESKTOP INVENTORY TABLE (Visible on screens >= 768px)
+            =================================================================== */}
         {state.status === "ready" && rows.length > 0 && (
-          <div className="overflow-x-auto min-w-0 w-full rounded-lg border bg-card">
+          <div className="hidden md:block overflow-x-auto min-w-0 w-full rounded-lg border bg-card">
             <table className="w-full text-left text-xs sm:text-sm">
               <thead className="bg-surface/60 border-b text-muted-foreground text-[11px] sm:text-xs uppercase tracking-wider font-semibold">
                 <tr>
@@ -341,13 +564,12 @@ export default function InventoryPage() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {rows.map((r) => {
+                {paginatedRows.map((r) => {
                   const pId = r.product_id ?? "";
                   const isExpanded = expandedRows.has(pId);
                   const isRollTracked = r.tracking_mode === "roll";
                   const details = expandedData[pId];
 
-                  // Calculate size across applicable Base UOMs (sqft, ft, m, sqm, in, mm, sheet)
                   const sizeDisplay =
                     formatPhysicalSize(
                       r.stock_qty,
@@ -380,13 +602,213 @@ export default function InventoryPage() {
             </table>
           </div>
         )}
+
+        {/* ===================================================================
+            MOBILE INVENTORY CARDS (Visible on screens < 768px, ZERO HORIZONTAL SCROLL)
+            =================================================================== */}
+        {state.status === "ready" && rows.length > 0 && (
+          <div className="block md:hidden space-y-3 min-w-0 w-full">
+            {paginatedRows.map((r) => {
+              const pId = r.product_id ?? "";
+              const isExpanded = expandedRows.has(pId);
+              const isRollTracked = r.tracking_mode === "roll";
+              const details = expandedData[pId];
+
+              const sizeDisplay =
+                formatPhysicalSize(
+                  r.stock_qty,
+                  r.paano_in_feet,
+                  r.base_uom_code,
+                  details?.product?.specs as Record<string, unknown> | null,
+                ) ?? "—";
+
+              const statusKey = (
+                r.stock_status && r.stock_status in STATUS_LABEL
+                  ? r.stock_status
+                  : "healthy"
+              ) as keyof typeof STATUS_LABEL;
+
+              return (
+                <MobileProductInventoryCard
+                  key={pId}
+                  row={r}
+                  sizeDisplay={sizeDisplay}
+                  statusKey={statusKey}
+                  isExpanded={isExpanded}
+                  isRollTracked={isRollTracked}
+                  details={details}
+                  onToggle={() => toggleExpand(pId, r.tracking_mode)}
+                  onRefresh={() => void loadProductDetails(pId, r.tracking_mode)}
+                />
+              );
+            })}
+          </div>
+        )}
+
+        {/* ===================================================================
+            PAGINATION CONTROLS (Responsive on Mobile and Desktop)
+            =================================================================== */}
+        {state.status === "ready" && rows.length > 0 && (
+          <PaginationBar
+            currentPage={safeCurrentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            totalItems={rows.length}
+            itemName="products"
+            scrollTargetId="inventory-top"
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize);
+              setCurrentPage(1);
+            }}
+          />
+        )}
       </CardContent>
     </Card>
   );
 }
 
 // =============================================================================
-// Individual Inventory Row & Expandable Container
+// MOBILE PRODUCT INVENTORY CARD (Zero Horizontal Blowout on Mobile)
+// =============================================================================
+function MobileProductInventoryCard({
+  row,
+  sizeDisplay,
+  statusKey,
+  isExpanded,
+  isRollTracked,
+  details,
+  onToggle,
+  onRefresh,
+}: {
+  row: InventoryRow;
+  sizeDisplay: string;
+  statusKey: keyof typeof STATUS_LABEL;
+  isExpanded: boolean;
+  isRollTracked: boolean;
+  details?: ExpandedProductDetails;
+  onToggle: () => void;
+  onRefresh: () => void;
+}) {
+  const swgDiameter = details?.product?.swg?.diameter_mm;
+
+  return (
+    <Card
+      className={cn(
+        "rounded-xl border bg-card shadow-2xs transition-all overflow-hidden",
+        isExpanded ? "border-brand-blue/50 ring-1 ring-brand-blue/20" : "hover:border-border",
+      )}
+    >
+      <div className="p-3.5 space-y-2.5">
+        {/* Top Header: Code, Category, Status */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="font-mono text-xs font-bold text-brand-blue px-2 py-0.5 rounded bg-brand-blue/10 shrink-0">
+              {row.code}
+            </span>
+            <span className="text-xs text-muted-foreground font-medium truncate">
+              {row.category_name ?? "General"}
+            </span>
+          </div>
+
+          <span
+            className={cn(
+              "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border shrink-0",
+              STATUS_STYLE[statusKey],
+            )}
+          >
+            {STATUS_LABEL[statusKey]}
+          </span>
+        </div>
+
+        {/* Product Title & Badges */}
+        <div>
+          <h3 className="text-sm font-bold text-foreground leading-snug">
+            {row.name}
+          </h3>
+          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+            {row.gauge && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-800 border border-slate-200">
+                Gauge {row.gauge} {swgDiameter ? `(${swgDiameter} mm)` : ""}
+              </span>
+            )}
+            {isRollTracked ? (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-900 border border-purple-200">
+                Roll Tracked ({row.active_rolls_count ?? 0} rolls)
+              </span>
+            ) : (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                Aggregate Stock
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* 2-Column Metrics Strip */}
+        <div className="grid grid-cols-2 gap-2 bg-surface/60 p-2.5 rounded-lg border border-border/50 text-xs">
+          <div>
+            <span className="text-[10px] uppercase font-bold text-muted-foreground block">
+              Current Stock
+            </span>
+            <span className="font-mono font-extrabold text-sm text-foreground block mt-0.5">
+              {formatQty(row.stock_qty ?? 0)}{" "}
+              <span className="text-xs font-normal text-muted-foreground">
+                {row.base_uom_code ?? ""}
+              </span>
+            </span>
+            <span className="text-[10px] text-muted-foreground truncate block mt-0.5">
+              {row.low_stock_threshold
+                ? `Alert: ${row.low_stock_threshold} ${row.base_uom_code}`
+                : "No alert"}
+            </span>
+          </div>
+
+          <div>
+            <span className="text-[10px] uppercase font-bold text-muted-foreground block">
+              Physical Size
+            </span>
+            <span className="font-mono font-bold text-xs text-brand-blue block mt-0.5 truncate">
+              {sizeDisplay}
+            </span>
+            <span className="text-[10px] text-muted-foreground truncate block mt-0.5">
+              {row.paano_value != null && row.paano_unit
+                ? `Height (Paano): ${row.paano_value} ${row.paano_unit.toLowerCase() === "m" ? "mtr" : row.paano_unit}`
+                : "No paano"}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Tap Bar for Specifications & Audit Trail */}
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-medium text-brand-blue bg-surface/30 hover:bg-surface/80 border-t border-border/60 transition-colors"
+      >
+        <span>{isExpanded ? "Hide Specifications" : "View Specifications & History"}</span>
+        <ChevronDown
+          className={cn("h-4 w-4 transition-transform duration-200", isExpanded && "rotate-180")}
+        />
+      </button>
+
+      {/* Expanded Details Panel */}
+      {isExpanded && (
+        <div className="p-3.5 border-t bg-surface/20">
+          <ExpandedProductDetailsPanel
+            row={row}
+            sizeDisplay={sizeDisplay}
+            details={details}
+            onRefresh={onRefresh}
+            isMobile
+          />
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// =============================================================================
+// DESKTOP PRODUCT INVENTORY ROW (for md:block table)
 // =============================================================================
 function ProductInventoryRow({
   row,
@@ -523,18 +945,20 @@ function ProductInventoryRow({
 }
 
 // =============================================================================
-// Expanded Details Content Panel
+// EXPANDED DETAILS CONTENT PANEL (Responsive for Mobile & Desktop)
 // =============================================================================
 function ExpandedProductDetailsPanel({
   row,
   sizeDisplay,
   details,
   onRefresh,
+  isMobile = false,
 }: {
   row: InventoryRow;
   sizeDisplay: string;
   details?: ExpandedProductDetails;
   onRefresh: () => void;
+  isMobile?: boolean;
 }) {
   const isRollTracked = row.tracking_mode === "roll";
 
@@ -574,7 +998,7 @@ function ExpandedProductDetailsPanel({
   const isReconciled = discrepancy.isZero();
 
   return (
-    <div className="space-y-4 animate-in fade-in-50 text-xs">
+    <div className="space-y-3 sm:space-y-4 animate-in fade-in-50 text-xs">
       {/* 1. Header Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2.5">
         <div className="flex items-center gap-2">
@@ -601,7 +1025,7 @@ function ExpandedProductDetailsPanel({
       </div>
 
       {/* 2. Specifications Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 bg-card p-3 rounded-lg border shadow-2xs">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3 bg-card p-3 rounded-lg border shadow-2xs">
         {/* Base Unit */}
         <div>
           <span className="text-[10px] uppercase font-semibold text-muted-foreground block">
@@ -630,7 +1054,7 @@ function ExpandedProductDetailsPanel({
           <span className="font-medium text-foreground">
             {row.paano_value != null && row.paano_unit
               ? formatPaano(row.paano_value, row.paano_unit, row.paano_in_feet)
-              : "— (Not configured)"}
+              : "—"}
           </span>
         </div>
 
@@ -801,9 +1225,13 @@ function ExpandedProductDetailsPanel({
                 <AlertTriangle className="h-4 w-4 shrink-0 text-amber-700 mt-0.5" />
                 <div>
                   <strong>Reconciliation Discrepancy Detected:</strong> Active rolls sum is{" "}
-                  <span className="font-mono font-bold">{formatQty(activeRollSum)} {row.base_uom_code}</span>,
-                  but aggregate stock balance is{" "}
-                  <span className="font-mono font-bold">{formatQty(row.stock_qty ?? 0)} {row.base_uom_code}</span>{" "}
+                  <span className="font-mono font-bold">
+                    {formatQty(activeRollSum)} {row.base_uom_code}
+                  </span>
+                  , but aggregate stock balance is{" "}
+                  <span className="font-mono font-bold">
+                    {formatQty(row.stock_qty ?? 0)} {row.base_uom_code}
+                  </span>{" "}
                   (Difference:{" "}
                   <span className="font-mono font-bold">
                     {discrepancy.isPositive() ? "+" : ""}
@@ -815,10 +1243,57 @@ function ExpandedProductDetailsPanel({
             )}
           </div>
 
-          {/* Roll Breakdown Table */}
+          {/* Roll Breakdown: Mobile Mini-Cards vs Desktop Sub-table */}
           {details.rolls.length === 0 ? (
             <div className="p-4 text-center rounded border border-dashed text-muted-foreground text-xs">
               No roll records found for this product.
+            </div>
+          ) : isMobile ? (
+            <div className="space-y-2">
+              {details.rolls.map((roll) => {
+                const statusBadgeClass =
+                  roll.status === "in_stock"
+                    ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                    : roll.status === "consumed"
+                      ? "bg-slate-100 text-slate-700 border-slate-200"
+                      : "bg-rose-50 text-rose-800 border-rose-200";
+
+                return (
+                  <div
+                    key={roll.id}
+                    className="p-2.5 rounded-lg border bg-card flex items-center justify-between gap-2"
+                  >
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono font-bold text-xs text-foreground">
+                          {roll.label}
+                        </span>
+                        <span
+                          className={`inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-semibold border ${statusBadgeClass}`}
+                        >
+                          {roll.status === "in_stock"
+                            ? "In Stock"
+                            : roll.status === "consumed"
+                              ? "Consumed"
+                              : "Voided"}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground font-mono block mt-0.5">
+                        Initial: {formatQty(roll.initial_qty)} {row.base_uom_code}
+                      </span>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="font-mono font-bold text-xs text-foreground block">
+                        {formatQty(roll.remaining_qty)} {row.base_uom_code}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground font-mono block">
+                        {formatDateTime(roll.created_at)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="overflow-x-auto rounded border bg-card">
@@ -879,7 +1354,7 @@ function ExpandedProductDetailsPanel({
         </div>
       )}
 
-      {/* 4. RECENT MOVEMENT HISTORY (Section 7) */}
+      {/* 4. RECENT MOVEMENT HISTORY (Audit Trail) */}
       <div className="space-y-2 pt-2 border-t">
         <div className="flex items-center justify-between">
           <span className="font-semibold text-xs text-foreground flex items-center gap-1.5 uppercase tracking-wider">
@@ -894,6 +1369,84 @@ function ExpandedProductDetailsPanel({
         {details.recentMovements.length === 0 ? (
           <div className="p-3 text-center rounded border border-dashed text-muted-foreground text-xs">
             No stock movements recorded for this product yet.
+          </div>
+        ) : isMobile ? (
+          <div className="space-y-2">
+            {details.recentMovements.map((m) => {
+              const isPositive = m.qty_delta > 0;
+              const isCorrection = m.movement_type === "correction";
+              const isReversal = m.movement_type === "reversal";
+              const isOpening = m.movement_type === "opening";
+
+              let badgeLabel = "Movement";
+              let badgeClass = "bg-slate-100 text-slate-800 border-slate-200";
+              let TypeIcon = History;
+
+              if (m.movement_type === "add") {
+                badgeLabel = "Stock In";
+                badgeClass = "bg-emerald-50 text-emerald-800 border-emerald-200";
+                TypeIcon = ArrowDownRight;
+              } else if (m.movement_type === "remove") {
+                badgeLabel = "Stock Out";
+                badgeClass = "bg-blue-50 text-blue-800 border-blue-200";
+                TypeIcon = ArrowUpRight;
+              } else if (isCorrection) {
+                badgeLabel = "Correction";
+                badgeClass = "bg-amber-50 text-amber-800 border-amber-200";
+                TypeIcon = RotateCcw;
+              } else if (isOpening) {
+                badgeLabel = "Opening";
+                badgeClass = "bg-purple-50 text-purple-800 border-purple-200";
+                TypeIcon = Sparkles;
+              } else if (isReversal) {
+                badgeLabel = "Reversal";
+                badgeClass = "bg-rose-50 text-rose-800 border-rose-200";
+                TypeIcon = RotateCcw;
+              }
+
+              return (
+                <div
+                  key={m.id}
+                  className="p-2.5 rounded-lg border bg-card flex items-start justify-between gap-2 text-xs"
+                >
+                  <div className="space-y-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span
+                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border ${badgeClass}`}
+                      >
+                        <TypeIcon className="h-3 w-3 shrink-0" />
+                        <span>{badgeLabel}</span>
+                      </span>
+                      {m.roll?.label && (
+                        <span className="font-mono text-[10px] bg-purple-100 text-purple-900 border border-purple-200 px-1.5 py-0.2 rounded">
+                          Roll: {m.roll.label}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground flex items-center gap-1 flex-wrap">
+                      <span>{formatDateTime(m.created_at)}</span>
+                      {m.creator?.full_name && <span>· by {m.creator.full_name}</span>}
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <span
+                      className={`font-mono font-bold text-xs block ${
+                        isPositive ? "text-emerald-700" : "text-rose-700"
+                      }`}
+                    >
+                      {isPositive ? "+" : ""}
+                      {formatQty(m.qty_delta)} {row.base_uom_code}
+                    </span>
+                    {m.bill_status && (
+                      <span className="text-[10px] text-muted-foreground block">
+                        {m.bill_status === "with_bill" ? "With Bill" : "No Bill"}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="overflow-x-auto rounded border bg-card">

@@ -144,6 +144,7 @@ describe("formatPaano", () => {
   it("formats value with unit", () => {
     expect(formatPaano(4, "ft")).toBe("4 ft");
     expect(formatPaano(48, "in", 4)).toBe("48 in (4 ft)");
+    expect(formatPaano(1, "m", 3.281)).toBe("1 mtr (3.281 ft)");
   });
 
   it("returns dash for missing value", () => {
