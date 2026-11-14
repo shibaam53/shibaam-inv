@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { Search, X, Check, Sliders, ChevronDown } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { formatQty, formatPhysicalSize, formatPaano } from "@/app/lib/format";
@@ -228,10 +229,50 @@ export function ProductSelector({
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const [dropdownPosition, setDropdownPosition] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    maxHeight: number;
+  } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const updateDropdownPosition = () => {
+    if (!inputRef.current) return;
+    const rect = inputRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom - 8;
+    const spaceAbove = rect.top - 8;
+    const openUpwards = spaceBelow < 180 && spaceAbove > spaceBelow;
+    const maxHeight = Math.min(240, Math.max(120, openUpwards ? spaceAbove : spaceBelow));
+
+    setDropdownPosition({
+      top: openUpwards ? rect.top - maxHeight - 4 : rect.bottom + 4,
+      left: rect.left,
+      width: rect.width,
+      maxHeight,
+    });
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    updateDropdownPosition();
+
+    const handleScrollOrResize = () => {
+      updateDropdownPosition();
+    };
+
+    window.addEventListener("scroll", handleScrollOrResize, true);
+    window.addEventListener("resize", handleScrollOrResize);
+
+    return () => {
+      window.removeEventListener("scroll", handleScrollOrResize, true);
+      window.removeEventListener("resize", handleScrollOrResize);
+    };
+  }, [isOpen]);
 
   const selectedProduct = useMemo(() => {
     return products.find((p) => p.id === selectedProductId) || null;
@@ -245,12 +286,15 @@ export function ProductSelector({
   const safeHighlightedIndex =
     highlightedIndex >= filteredProducts.length ? 0 : highlightedIndex;
 
-  // Click outside listener to close dropdown
+  // Click outside listener to close dropdown (handles portaled dropdown as well)
   useEffect(() => {
     function handleClickOutside(e: MouseEvent | TouchEvent) {
+      const target = e.target as Node;
       if (
         containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
+        !containerRef.current.contains(target) &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(target)
       ) {
         setIsOpen(false);
       }
@@ -419,73 +463,85 @@ export function ProductSelector({
           </div>
         </div>
 
-        {/* Dropdown Menu */}
-        {isOpen && (
-          <div
-            ref={dropdownRef}
-            className="absolute left-0 right-0 z-50 mt-1 max-h-72 overflow-y-auto rounded-lg border border-input bg-white dark:bg-slate-900 text-foreground shadow-2xl animate-in fade-in-50 zoom-in-95"
-          >
-            {filteredProducts.length === 0 ? (
-              <div className="p-4 text-center text-xs text-muted-foreground">
-                <p className="font-medium">No matching products found</p>
-                <p className="text-[11px] mt-0.5">
-                  Try searching by code, mesh, material, gauge, or dimensions.
-                </p>
-              </div>
-            ) : (
-              <ul className="py-1 divide-y divide-border/40">
-                {filteredProducts.map((p, index) => {
-                  const isSelected = p.id === selectedProductId;
-                  const isHighlighted = index === safeHighlightedIndex;
-                  const specSummary = getProductSpecSummary(p);
+        {/* Dropdown Menu (Portaled so it clips out of modals freely without expanding modal size) */}
+        {isOpen &&
+          dropdownPosition &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <div
+              ref={dropdownRef}
+              style={{
+                position: "fixed",
+                top: `${dropdownPosition.top}px`,
+                left: `${dropdownPosition.left}px`,
+                width: `${dropdownPosition.width}px`,
+                maxHeight: `${dropdownPosition.maxHeight}px`,
+                zIndex: 99999,
+              }}
+              className="overflow-y-auto rounded-lg border border-input bg-white dark:bg-slate-900 text-foreground shadow-2xl animate-in fade-in-50 zoom-in-95"
+            >
+              {filteredProducts.length === 0 ? (
+                <div className="p-4 text-center text-xs text-muted-foreground">
+                  <p className="font-medium">No matching products found</p>
+                  <p className="text-[11px] mt-0.5">
+                    Try searching by code, mesh, material, gauge, or dimensions.
+                  </p>
+                </div>
+              ) : (
+                <ul className="py-1 divide-y divide-border/40">
+                  {filteredProducts.map((p, index) => {
+                    const isSelected = p.id === selectedProductId;
+                    const isHighlighted = index === safeHighlightedIndex;
+                    const specSummary = getProductSpecSummary(p);
 
-                  return (
-                    <li
-                      key={p.id}
-                      data-product-row
-                      onClick={() => handleSelect(p)}
-                      onMouseEnter={() => setHighlightedIndex(index)}
-                      className={`px-3 py-2.5 cursor-pointer text-left transition-colors flex items-start justify-between gap-3 ${
-                        isHighlighted
-                          ? "bg-brand-blue/10 text-foreground"
-                          : "hover:bg-muted/60"
-                      } ${isSelected ? "bg-primary/5 font-medium" : ""}`}
-                    >
-                      <div className="space-y-1 min-w-0 flex-1">
-                        {/* Primary Line: Product Name & Code */}
-                        <div className="flex flex-wrap items-center gap-1.5 leading-snug">
-                          <span className="font-semibold text-xs text-foreground">
-                            <HighlightMatch text={p.name} query={query} />
-                          </span>
-                          <span className="font-mono text-[10px] font-bold text-muted-foreground bg-muted/80 px-1.5 py-0.2 rounded border border-border/60 shrink-0">
-                            <HighlightMatch text={p.code} query={query} />
-                          </span>
+                    return (
+                      <li
+                        key={p.id}
+                        data-product-row
+                        onClick={() => handleSelect(p)}
+                        onMouseEnter={() => setHighlightedIndex(index)}
+                        className={`px-3 py-2.5 cursor-pointer text-left transition-colors flex items-start justify-between gap-3 ${
+                          isHighlighted
+                            ? "bg-brand-blue/10 text-foreground"
+                            : "hover:bg-muted/60"
+                        } ${isSelected ? "bg-primary/5 font-medium" : ""}`}
+                      >
+                        <div className="space-y-1 min-w-0 flex-1">
+                          {/* Primary Line: Product Name & Code */}
+                          <div className="flex flex-wrap items-center gap-1.5 leading-snug">
+                            <span className="font-semibold text-xs text-foreground">
+                              <HighlightMatch text={p.name} query={query} />
+                            </span>
+                            <span className="font-mono text-[10px] font-bold text-muted-foreground bg-muted/80 px-1.5 py-0.2 rounded border border-border/60 shrink-0">
+                              <HighlightMatch text={p.code} query={query} />
+                            </span>
+                          </div>
+
+                          {/* Secondary Line: Specification Summary */}
+                          {specSummary && (
+                            <div className="text-[11px] text-muted-foreground truncate leading-normal">
+                              <HighlightMatch text={specSummary} query={query} />
+                            </div>
+                          )}
                         </div>
 
-                        {/* Secondary Line: Specification Summary */}
-                        {specSummary && (
-                          <div className="text-[11px] text-muted-foreground truncate leading-normal">
-                            <HighlightMatch text={specSummary} query={query} />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Right Indicator (Check or Stock) */}
-                      <div className="shrink-0 flex items-center gap-2 self-center">
-                        <span className="font-mono text-[11px] text-muted-foreground text-right hidden sm:inline">
-                          {formatQty(getProductStockBalance(p))} {p.base_uom?.code}
-                        </span>
-                        {isSelected && (
-                          <Check className="h-4 w-4 text-brand-blue shrink-0" />
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-        )}
+                        {/* Right Indicator (Check or Stock) */}
+                        <div className="shrink-0 flex items-center gap-2 self-center">
+                          <span className="font-mono text-[11px] text-muted-foreground text-right hidden sm:inline">
+                            {formatQty(getProductStockBalance(p))} {p.base_uom?.code}
+                          </span>
+                          {isSelected && (
+                            <Check className="h-4 w-4 text-brand-blue shrink-0" />
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>,
+            document.body,
+          )}
       </div>
 
       {/* Selected Product Information Card */}

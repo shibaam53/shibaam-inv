@@ -38,6 +38,7 @@ import {
   getProductStockBalance,
 } from "@/app/components/ProductSelector";
 import { useFormErrorVisibility } from "@/app/lib/useFormErrorVisibility";
+import { PaginationBar } from "@/app/components/PaginationBar";
 
 type MovementType = Database["public"]["Enums"]["movement_type"];
 type BillStatus = Database["public"]["Enums"]["bill_status"];
@@ -126,6 +127,10 @@ export default function MovementsPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [billStatusFilter, setBillStatusFilter] = useState<string>("all");
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(25);
 
   // Modals
   const [showAddModal, setShowAddModal] = useState(false);
@@ -355,6 +360,42 @@ export default function MovementsPage() {
     isSuperUser,
   ]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredMovements.length / pageSize));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const paginatedMovements = useMemo(() => {
+    const start = (safeCurrentPage - 1) * pageSize;
+    return filteredMovements.slice(start, start + pageSize);
+  }, [filteredMovements, safeCurrentPage, pageSize]);
+
+  const hasActiveFilters = Boolean(
+    search.trim() ||
+      typeFilter !== "all" ||
+      productFilter !== "all" ||
+      billStatusFilter !== "all" ||
+      dateFrom ||
+      dateTo,
+  );
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (search.trim()) count++;
+    if (typeFilter !== "all") count++;
+    if (productFilter !== "all") count++;
+    if (billStatusFilter !== "all") count++;
+    if (dateFrom || dateTo) count++;
+    return count;
+  }, [search, typeFilter, productFilter, billStatusFilter, dateFrom, dateTo]);
+
+  const handleClearFilters = () => {
+    setSearch("");
+    setTypeFilter("all");
+    setProductFilter("all");
+    setBillStatusFilter("all");
+    setDateFrom("");
+    setDateTo("");
+    setCurrentPage(1);
+  };
+
   return (
     <div className="space-y-6">
       {/* Toast Alert */}
@@ -372,22 +413,22 @@ export default function MovementsPage() {
       )}
 
       {/* Header and Action Toolbar */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-ink">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink">
             Stock Ledger & Movements
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Authoritative, immutable transaction ledger. All mutations are
-            backed by transactional PostgreSQL RPCs.
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+            Complete audit trail of all inward receipts, outward dispatches, opening balances, and stock corrections.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Action Buttons: Responsive 2-col on mobile, flex on desktop */}
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center gap-2">
           {/* Add Stock button - All authenticated users */}
           <Button
             onClick={() => setShowAddModal(true)}
-            className="bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
+            className="bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs h-9 text-xs sm:text-sm font-medium"
           >
             <Plus className="mr-1.5 h-4 w-4" />
             Add Stock
@@ -396,7 +437,7 @@ export default function MovementsPage() {
           {/* Remove Stock button - All authenticated users */}
           <Button
             onClick={() => setShowRemoveModal(true)}
-            className="bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
+            className="bg-blue-600 text-white hover:bg-blue-700 shadow-xs h-9 text-xs sm:text-sm font-medium"
           >
             <Minus className="mr-1.5 h-4 w-4" />
             Remove Stock
@@ -408,7 +449,7 @@ export default function MovementsPage() {
               <Button
                 variant="outline"
                 onClick={() => setShowOpeningModal(true)}
-                className="border-purple-200 text-purple-700 hover:bg-purple-50"
+                className="border-purple-200 text-purple-700 hover:bg-purple-50 h-9 text-xs sm:text-sm font-medium"
                 title="Establish initial baseline opening stock for products"
               >
                 <Sparkles className="mr-1.5 h-4 w-4" />
@@ -418,7 +459,7 @@ export default function MovementsPage() {
               <Button
                 variant="outline"
                 onClick={() => setShowCorrectionModal(true)}
-                className="border-amber-200 text-amber-800 hover:bg-amber-50"
+                className="border-amber-200 text-amber-800 hover:bg-amber-50 h-9 text-xs sm:text-sm font-medium"
                 title="Super User signed physical count correction (requires reason)"
               >
                 <SlidersHorizontal className="mr-1.5 h-4 w-4" />
@@ -432,11 +473,11 @@ export default function MovementsPage() {
             size="sm"
             onClick={loadData}
             disabled={loading}
-            className="text-xs"
+            className="col-span-2 sm:col-span-1 h-9 text-xs font-medium"
             title="Refresh movements"
           >
             <History
-              className={`mr-1 h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
+              className={`mr-1.5 h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
             />
             Refresh
           </Button>
@@ -451,27 +492,71 @@ export default function MovementsPage() {
         </div>
       )}
 
-      {/* Search and Filters Card */}
-      <Card>
-        <CardContent className="p-4 space-y-3">
-          <div className="flex flex-wrap gap-3">
-            {/* Search Input */}
-            <div className="relative min-w-[220px] flex-1">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+      {/* Search and Filters Card: Desktop Single Row Toolbar (lg+) & Clean Mobile Layout (< lg) */}
+      <Card className="min-w-0 shadow-xs border">
+        <CardContent className="p-3.5 sm:p-4 space-y-3">
+          {/* Mobile Active Filters Bar (shown on mobile when filters are applied) */}
+          {hasActiveFilters && (
+            <div className="flex lg:hidden items-center justify-between pb-2 border-b border-border/60">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <SlidersHorizontal className="h-3.5 w-3.5 text-brand-blue" />
+                <span>Active Filters</span>
+                <span className="rounded-full bg-brand-blue/10 px-1.5 py-0.2 text-[10px] font-bold text-brand-blue font-mono">
+                  {activeFilterCount}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleClearFilters}
+                className="flex items-center gap-1 text-xs font-semibold text-rose-600 hover:text-rose-700 active:bg-rose-50 px-2 py-0.5 rounded transition-colors"
+                title="Clear all filters"
+              >
+                <X className="h-3.5 w-3.5" />
+                Clear all
+              </button>
+            </div>
+          )}
+
+          {/* Desktop Toolbar: Single Row for All Controls + Cross Icon (lg+) */}
+          <div className="hidden lg:flex lg:items-center lg:gap-2.5">
+            {/* Search Input (flexible width) */}
+            <div className="relative flex-1 min-w-[180px]">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
               <Input
                 placeholder="Search product code, name, reference, reason..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 h-9 text-sm"
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="pl-9 pr-8 h-9 text-xs bg-background"
+                aria-label="Search movements"
               />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch("");
+                    setCurrentPage(1);
+                  }}
+                  className="absolute right-2 top-2 text-muted-foreground hover:text-foreground p-0.5"
+                  aria-label="Clear search text"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
             </div>
 
             {/* Type filter */}
-            <div className="w-36">
+            <div className="w-32 shrink-0">
               <select
                 value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-                className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onChange={(e) => {
+                  setTypeFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue"
+                aria-label="Filter by movement type"
               >
                 <option value="all">All Types</option>
                 <option value="add">Add (+)</option>
@@ -483,11 +568,15 @@ export default function MovementsPage() {
             </div>
 
             {/* Product filter */}
-            <div className="w-48">
+            <div className="w-44 shrink-0">
               <select
                 value={productFilter}
-                onChange={(e) => setProductFilter(e.target.value)}
-                className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onChange={(e) => {
+                  setProductFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue truncate"
+                aria-label="Filter by product"
               >
                 <option value="all">All Products</option>
                 {products.map((p) => (
@@ -498,14 +587,18 @@ export default function MovementsPage() {
               </select>
             </div>
 
-            {/* Bill status filter (SUPER USER ONLY per AGENTS.md §4 and PROJECT.md §4) */}
+            {/* Bill status filter (Super User only) */}
             {isSuperUser && (
-              <div className="w-40">
+              <div className="w-32 shrink-0">
                 <select
                   value={billStatusFilter}
-                  onChange={(e) => setBillStatusFilter(e.target.value)}
-                  className="h-9 w-full rounded-md border border-sky-300 bg-sky-50/50 px-2.5 text-xs font-medium text-sky-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  onChange={(e) => {
+                    setBillStatusFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="h-9 w-full rounded-md border border-sky-300 bg-sky-50/70 px-2.5 text-xs font-semibold text-sky-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-500"
                   title="Super User Only: Filter by Bill Status"
+                  aria-label="Filter by bill status"
                 >
                   <option value="all">Bill: All</option>
                   <option value="with_bill">With bill</option>
@@ -514,63 +607,204 @@ export default function MovementsPage() {
               </div>
             )}
 
-            {/* Date range filters */}
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Calendar className="h-3.5 w-3.5" />
+            {/* Date range filters inline */}
+            <div className="flex items-center gap-1.5 shrink-0 text-muted-foreground text-xs">
+              <Calendar className="h-4 w-4 shrink-0 text-brand-blue" />
               <input
                 type="date"
                 value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="h-9 rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onChange={(e) => {
+                  setDateFrom(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="h-9 w-32 rounded-md border border-input bg-background px-2 text-xs font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue"
                 title="From Date"
+                aria-label="From Date"
               />
-              <span>to</span>
+              <span className="px-0.5 text-xs text-muted-foreground font-medium">
+                to
+              </span>
               <input
                 type="date"
                 value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="h-9 rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onChange={(e) => {
+                  setDateTo(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="h-9 w-32 rounded-md border border-input bg-background px-2 text-xs font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue"
                 title="To Date"
+                aria-label="To Date"
               />
             </div>
 
-            {/* Reset filters */}
-            {(search ||
-              typeFilter !== "all" ||
-              productFilter !== "all" ||
-              billStatusFilter !== "all" ||
-              dateFrom ||
-              dateTo) && (
+            {/* Cross Icon Button ONLY for Clear Filters on Desktop (Same Line!) */}
+            {hasActiveFilters && (
               <Button
+                type="button"
                 variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setSearch("");
-                  setTypeFilter("all");
-                  setProductFilter("all");
-                  setBillStatusFilter("all");
-                  setDateFrom("");
-                  setDateTo("");
-                }}
-                className="h-9 text-xs text-muted-foreground hover:text-foreground"
+                size="icon"
+                onClick={handleClearFilters}
+                className="h-9 w-9 shrink-0 rounded-md text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                title="Clear all filters"
+                aria-label="Clear all filters"
               >
-                Clear Filters
+                <X className="h-4 w-4" />
               </Button>
             )}
           </div>
 
-          <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t">
+          {/* Mobile Grid Layout (< lg) */}
+          <div className="grid grid-cols-2 gap-2.5 lg:hidden">
+            {/* Search Input (full width) */}
+            <div className="col-span-2 relative">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                placeholder="Search code, name, ref..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="pl-9 pr-8 h-9 text-xs bg-background"
+                aria-label="Search movements"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch("");
+                    setCurrentPage(1);
+                  }}
+                  className="absolute right-2 top-2 text-muted-foreground hover:text-foreground p-0.5"
+                  aria-label="Clear search text"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Type filter */}
+            <div className="col-span-1">
+              <select
+                value={typeFilter}
+                onChange={(e) => {
+                  setTypeFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue"
+                aria-label="Filter by movement type"
+              >
+                <option value="all">All Types</option>
+                <option value="add">Add (+)</option>
+                <option value="remove">Remove (-)</option>
+                <option value="opening">Opening</option>
+                <option value="correction">Correction</option>
+                <option value="reversal">Reversal</option>
+              </select>
+            </div>
+
+            {/* Bill filter for Super User or Product filter for Normal User */}
+            {isSuperUser ? (
+              <div className="col-span-1">
+                <select
+                  value={billStatusFilter}
+                  onChange={(e) => {
+                    setBillStatusFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="h-9 w-full rounded-md border border-sky-300 bg-sky-50/70 px-2.5 text-xs font-semibold text-sky-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-500"
+                  title="Super User Only: Filter by Bill Status"
+                  aria-label="Filter by bill status"
+                >
+                  <option value="all">Bill: All</option>
+                  <option value="with_bill">With bill</option>
+                  <option value="without_bill">Without bill</option>
+                </select>
+              </div>
+            ) : (
+              <div className="col-span-1">
+                <select
+                  value={productFilter}
+                  onChange={(e) => {
+                    setProductFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue truncate"
+                  aria-label="Filter by product"
+                >
+                  <option value="all">All Products</option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.code} - {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Product filter for Super User (full width so readable) */}
+            {isSuperUser && (
+              <div className="col-span-2">
+                <select
+                  value={productFilter}
+                  onChange={(e) => {
+                    setProductFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue truncate"
+                  aria-label="Filter by product"
+                >
+                  <option value="all">All Products</option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.code} - {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Date range on mobile (clean full width inline row, NO box wrapper) */}
+            <div className="col-span-2 flex items-center gap-1.5 text-muted-foreground text-xs w-full">
+              <Calendar className="h-4 w-4 text-brand-blue shrink-0" />
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => {
+                  setDateFrom(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="h-9 flex-1 min-w-0 rounded-md border border-input bg-background px-2 text-xs font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue"
+                title="From Date"
+                aria-label="From Date"
+              />
+              <span className="text-muted-foreground text-xs font-medium shrink-0 px-0.5">
+                to
+              </span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => {
+                  setDateTo(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="h-9 flex-1 min-w-0 rounded-md border border-input bg-background px-2 text-xs font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue"
+                title="To Date"
+                aria-label="To Date"
+              />
+            </div>
+          </div>
+
+          {/* Result Count and Scope Info */}
+          <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border/60">
             <span>
-              Showing{" "}
-              <strong className="text-foreground">
-                {filteredMovements.length}
-              </strong>{" "}
-              of {movements.length} movements
+              Showing <strong className="text-foreground">{filteredMovements.length}</strong> of {movements.length} movements
             </span>
-            <span>
-              Normal Users view their own movements; Super Users view full
-              company ledger.
-            </span>
+            
+              <span className="text-muted-foreground/80 hidden sm:inline">
+                {isSuperUser ? "Full company ledger" : "Normal Users view their own movements"}
+              </span>
+            
           </div>
         </CardContent>
       </Card>
@@ -595,152 +829,267 @@ export default function MovementsPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="border-b bg-surface text-xs font-semibold text-muted-foreground">
-                  <tr>
-                    <th className="py-3 px-3">Date & Time</th>
-                    <th className="py-3 px-3">Product</th>
-                    <th className="py-3 px-3">Type</th>
-                    <th className="py-3 px-3">Bill Status</th>
-                    <th className="py-3 px-3 text-right">Delta (Base)</th>
-                    <th className="py-3 px-3">Entered Qty</th>
-                    <th className="py-3 px-3 text-right">Balance</th>
-                    <th className="py-3 px-3">Roll / Lot</th>
-                    <th className="py-3 px-3">Actor</th>
-                    <th className="py-3 px-3">Reference / Notes</th>
-                    <th className="py-3 px-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y text-xs">
-                  {filteredMovements.map((m) => {
-                    const isReversed = reversedIds.has(m.id);
-                    const isReversalItself = m.movement_type === "reversal";
-                    const isPositive = m.qty_delta > 0;
-                    const baseCode = m.product?.base_uom?.code || "";
+            <>
+              {/* Mobile Card List (< md) */}
+              <div className="md:hidden space-y-3 p-3">
+                {paginatedMovements.map((m) => {
+                  const isReversed = reversedIds.has(m.id);
+                  const isPositive = m.qty_delta > 0;
+                  const baseCode = m.product?.base_uom?.code || "";
 
-                    return (
-                      <tr
-                        key={m.id}
-                        className={`hover:bg-slate-50/80 transition-colors ${
-                          isReversed ? "bg-slate-50/50 opacity-75" : ""
-                        }`}
-                      >
-                        {/* Timestamp */}
-                        <td className="py-3 px-3 whitespace-nowrap text-muted-foreground font-mono">
+                  return (
+                    <div
+                      key={m.id}
+                      className={`rounded-xl border bg-card shadow-xs overflow-hidden transition-all ${
+                        isReversed ? "opacity-70" : ""
+                      }`}
+                    >
+                      {/* Card Header Strip: Date + Badges */}
+                      <div className={`flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 border-b ${isReversed ? "bg-slate-50/80" : "bg-surface/50"}`}>
+                        <span className="font-mono text-xs text-muted-foreground">
                           {formatDateTime(m.created_at)}
-                        </td>
-
-                        {/* Product */}
-                        <td className="py-3 px-3 font-medium">
-                          <div className="font-semibold text-foreground">
-                            {m.product?.code || "—"}
-                          </div>
-                          <div className="text-[11px] text-muted-foreground truncate max-w-[150px]">
-                            {m.product?.name || "Product"}
-                          </div>
-                        </td>
-
-                        {/* Movement Type */}
-                        <td className="py-3 px-3 whitespace-nowrap">
+                        </span>
+                        <div className="flex items-center gap-1.5">
                           {renderMovementBadge(m.movement_type, isReversed)}
-                        </td>
+                          {m.bill_status ? renderBillBadge(m.bill_status) : null}
+                        </div>
+                      </div>
 
-                        {/* Bill Status */}
-                        <td className="py-3 px-3 whitespace-nowrap">
-                          {renderBillBadge(m.bill_status)}
-                        </td>
-
-                        {/* Quantity Delta (authoritative base quantity) */}
-                        <td
-                          className={`py-3 px-3 text-right whitespace-nowrap font-mono font-medium ${
-                            isPositive ? "text-emerald-700" : "text-rose-700"
-                          } ${isReversed ? "line-through" : ""}`}
-                        >
-                          {isPositive ? "+" : ""}
-                          {formatQty(m.qty_delta)}{" "}
-                          <span className="text-[11px] font-normal text-muted-foreground">
-                            {baseCode}
-                          </span>
-                        </td>
-
-                        {/* Entered Qty & UOM */}
-                        <td className="py-3 px-3 whitespace-nowrap">
-                          <div className="font-mono">
-                            {formatQty(m.entered_qty)}{" "}
-                            <span className="text-muted-foreground">
-                              {m.entered_uom?.code || ""}
+                      {/* Card Body */}
+                      <div className="p-3.5 space-y-3">
+                        {/* Product Code & Name */}
+                        <div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`font-mono text-xs font-bold px-2 py-0.5 rounded bg-brand-blue/10 text-brand-blue ${isReversed ? "line-through opacity-60" : ""}`}>
+                              {m.product?.code || "—"}
+                            </span>
+                            <span className="text-xs font-medium text-foreground truncate">
+                              {m.product?.name || "Product"}
                             </span>
                           </div>
-                          {m.conversion_factor && m.conversion_factor !== 1 && (
-                            <div className="text-[10px] text-muted-foreground">
-                              Factor: {formatQty(m.conversion_factor, 4)}
+                          {m.roll && (
+                            <div className="mt-1.5">
+                              <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-mono font-medium text-slate-800">
+                                <Layers className="h-3 w-3 text-slate-500" />
+                                {m.roll.label}
+                              </span>
                             </div>
                           )}
-                        </td>
+                        </div>
 
-                        {/* Balance Before -> After */}
-                        <td className="py-3 px-3 text-right whitespace-nowrap font-mono text-[11px]">
-                          <span className="text-muted-foreground">
-                            {formatQty(m.balance_before)}
-                          </span>
-                          <span className="text-muted-foreground mx-1">→</span>
-                          <span className="font-semibold text-foreground">
-                            {formatQty(m.balance_after)}
-                          </span>
-                        </td>
+                        {/* Quantity Metrics Box */}
+                        <div className="grid grid-cols-2 gap-2 rounded-lg border border-border/50 bg-surface/60 p-2.5 text-xs">
+                          <div>
+                            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                              Quantity Delta
+                            </div>
+                            <div
+                              className={`font-mono font-extrabold text-sm mt-0.5 ${
+                                isPositive ? "text-emerald-700" : "text-rose-700"
+                              } ${isReversed ? "line-through" : ""}`}
+                            >
+                              {isPositive ? "+" : ""}
+                              {formatQty(m.qty_delta)} {baseCode}
+                            </div>
+                            {m.entered_uom?.id !== m.product?.base_uom_id && (
+                              <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                                Entered: {formatQty(m.entered_qty)} {m.entered_uom?.code}
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                              Balance Effect
+                            </div>
+                            <div className="font-mono text-xs text-foreground mt-0.5">
+                              <span className="text-muted-foreground">{formatQty(m.balance_before)}</span>
+                              <span className="text-muted-foreground mx-1">→</span>
+                              <span className="font-semibold text-foreground">{formatQty(m.balance_after)}</span>
+                            </div>
+                          </div>
+                        </div>
 
-                        {/* Roll identifier */}
-                        <td className="py-3 px-3 whitespace-nowrap">
-                          {m.roll ? (
-                            <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-mono font-medium text-slate-800">
-                              <Layers className="h-3 w-3 text-slate-500" />
-                              {m.roll.label}
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </td>
-
-                        {/* Actor */}
-                        <td className="py-3 px-3 whitespace-nowrap text-muted-foreground">
-                          {m.creator?.full_name || "System"}
-                        </td>
-
-                        {/* Reference / Reason */}
-                        <td
-                          className="py-3 px-3 max-w-[180px] truncate"
-                          title={m.reference || m.reason || ""}
-                        >
-                          {m.reference && (
-                            <span className="font-mono text-foreground font-medium mr-1.5">
-                              {m.reference}
-                            </span>
-                          )}
-                          {m.reason && (
-                            <span className="text-muted-foreground italic">
-                              "{m.reason}"
-                            </span>
-                          )}
-                          {!m.reference && !m.reason && (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </td>
-
-                        {/* Actions */}
-                        <td className="py-3 px-3 text-right whitespace-nowrap">
-                          <div className="flex items-center justify-end gap-1.5">
+                        {/* Footer: Actor, Reference & Actions */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                          <div className="min-w-0 flex-1 truncate">
+                            <span>By: {m.creator?.full_name || "Unknown"}</span>
+                            {m.reference && (
+                              <span className="ml-1.5 italic font-mono text-[11px] text-foreground">
+                                ({m.reference})
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => setMovementDetails(m)}
-                              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-                              title="View full audit record"
+                              className="h-8 px-2 text-xs"
+                            >
+                              Details
+                            </Button>
+                            {isSuperUser &&
+                              !isReversed &&
+                              m.movement_type !== "reversal" && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setMovementToReverse(m)}
+                                  className="h-8 px-2 text-xs text-rose-700 border-rose-200 hover:bg-rose-50"
+                                  title="Reverse this movement"
+                                >
+                                  <RotateCcw className="mr-1 h-3 w-3" />
+                                  Reverse
+                                </Button>
+                              )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop Full Table (md+) */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b bg-surface text-xs font-semibold text-muted-foreground">
+                    <tr>
+                      <th className="py-3 px-3">Date & Time</th>
+                      <th className="py-3 px-3">Product</th>
+                      <th className="py-3 px-3">Type</th>
+                      <th className="py-3 px-3">Bill Status</th>
+                      <th className="py-3 px-3 text-right">Delta (Base)</th>
+                      <th className="py-3 px-3">Entered Qty</th>
+                      <th className="py-3 px-3 text-right">Balance</th>
+                      <th className="py-3 px-3">Roll / Lot</th>
+                      <th className="py-3 px-3">Actor</th>
+                      <th className="py-3 px-3">Reference / Notes</th>
+                      <th className="py-3 px-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y text-xs">
+                    {paginatedMovements.map((m) => {
+                      const isReversed = reversedIds.has(m.id);
+                      const isReversalItself = m.movement_type === "reversal";
+                      const isPositive = m.qty_delta > 0;
+                      const baseCode = m.product?.base_uom?.code || "";
+
+                      return (
+                        <tr
+                          key={m.id}
+                          className={`hover:bg-slate-50/80 transition-colors ${
+                            isReversed ? "bg-slate-50/50 opacity-75" : ""
+                          }`}
+                        >
+                          {/* Timestamp */}
+                          <td className="py-3 px-3 whitespace-nowrap text-muted-foreground font-mono">
+                            {formatDateTime(m.created_at)}
+                          </td>
+
+                          {/* Product */}
+                          <td className="py-3 px-3 font-medium">
+                            <div className="font-semibold text-foreground">
+                              {m.product?.code || "—"}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground truncate max-w-[150px]">
+                              {m.product?.name || "Product"}
+                            </div>
+                          </td>
+
+                          {/* Movement Type */}
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {renderMovementBadge(m.movement_type, isReversed)}
+                          </td>
+
+                          {/* Bill Status */}
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {renderBillBadge(m.bill_status)}
+                          </td>
+
+                          {/* Quantity Delta (authoritative base quantity) */}
+                          <td
+                            className={`py-3 px-3 text-right whitespace-nowrap font-mono font-medium ${
+                              isPositive ? "text-emerald-700" : "text-rose-700"
+                            } ${isReversed ? "line-through" : ""}`}
+                          >
+                            {isPositive ? "+" : ""}
+                            {formatQty(m.qty_delta)}{" "}
+                            <span className="text-[11px] font-normal text-muted-foreground">
+                              {baseCode}
+                            </span>
+                          </td>
+
+                          {/* Entered Qty & UOM */}
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            <div className="font-mono">
+                              {formatQty(m.entered_qty)}{" "}
+                              <span className="text-muted-foreground">
+                                {m.entered_uom?.code || ""}
+                              </span>
+                            </div>
+                            {m.conversion_factor && m.conversion_factor !== 1 && (
+                              <div className="text-[10px] text-muted-foreground">
+                                Factor: {formatQty(m.conversion_factor, 4)}
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Balance Before -> After */}
+                          <td className="py-3 px-3 text-right whitespace-nowrap font-mono text-[11px]">
+                            <span className="text-muted-foreground">
+                              {formatQty(m.balance_before)}
+                            </span>
+                            <span className="text-muted-foreground mx-1">→</span>
+                            <span className="font-semibold text-foreground">
+                              {formatQty(m.balance_after)}
+                            </span>
+                          </td>
+
+                          {/* Roll identifier */}
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {m.roll ? (
+                              <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-mono font-medium text-slate-800">
+                                <Layers className="h-3 w-3 text-slate-500" />
+                                {m.roll.label}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+
+                          {/* Actor */}
+                          <td className="py-3 px-3 whitespace-nowrap text-muted-foreground">
+                            {m.creator?.full_name || "Unknown"}
+                          </td>
+
+                          {/* Reference / Notes */}
+                          <td className="py-3 px-3 max-w-[200px] truncate text-muted-foreground">
+                            {m.reference ? (
+                              <span
+                                className="font-mono text-[11px]"
+                                title={m.reference}
+                              >
+                                {m.reference}
+                              </span>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+
+                          {/* Actions */}
+                          <td className="py-3 px-3 text-right whitespace-nowrap space-x-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setMovementDetails(m)}
+                              className="h-7 text-xs"
+                              title="Inspect full audit record"
                             >
                               Details
                             </Button>
 
-                            {/* Reverse button: Super User only, only if not already reversed, and not a reversal */}
+                            {/* Reversal action - Super User only, non-reversed rows */}
                             {isSuperUser &&
                               !isReversed &&
                               !isReversalItself && (
@@ -749,20 +1098,37 @@ export default function MovementsPage() {
                                   size="sm"
                                   onClick={() => setMovementToReverse(m)}
                                   className="h-7 px-2 text-xs border-rose-200 text-rose-700 hover:bg-rose-50"
-                                  title="Reverse this movement (appends an opposite compensatory ledger record)"
+                                  title="Append an offsetting reversal movement"
                                 >
                                   <RotateCcw className="mr-1 h-3 w-3" />
                                   Reverse
                                 </Button>
                               )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Shared Pagination Bar */}
+              <div className="px-4 pb-4">
+                <PaginationBar
+                  currentPage={safeCurrentPage}
+                  totalPages={totalPages}
+                  pageSize={pageSize}
+                  totalItems={filteredMovements.length}
+                  onPageChange={(page) => setCurrentPage(page)}
+                  onPageSizeChange={(size) => {
+                    setPageSize(size);
+                    setCurrentPage(1);
+                  }}
+                  pageSizeOptions={[15, 25, 50, 100]}
+                  itemName="movements"
+                />
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -1291,11 +1657,12 @@ function AddStockModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
-      <div ref={formRef} className="relative w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl border my-8">
-        <div className="flex items-center justify-between pb-3 border-b">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4">
+      <div className="w-full max-w-lg bg-card border rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+        {/* Fixed Header */}
+        <div className="flex items-center justify-between border-b px-5 sm:px-6 py-3.5 bg-surface/30 shrink-0">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 shrink-0">
               <Plus className="h-4 w-4" />
             </div>
             <div>
@@ -1303,30 +1670,31 @@ function AddStockModal({
                 Add Stock to Ledger
               </h2>
               <p className="text-xs text-muted-foreground">
-                Inward stock mutation (recorded in Base UOM)
+                Inward stock received into warehouse
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-muted-foreground hover:bg-surface"
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted transition-colors"
+            aria-label="Close modal"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        {modalError && (
-          <div role="alert" className="mt-4 flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-xs text-destructive">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>{modalError}</span>
-          </div>
-        )}
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div ref={formRef} className="overflow-y-auto flex-1 min-h-0 p-5 sm:p-6 space-y-4">
+            {modalError && (
+              <div role="alert" className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-xs text-destructive">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{modalError}</span>
+              </div>
+            )}
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          <div className="rounded-lg bg-emerald-50 p-3 text-xs text-emerald-900 border border-emerald-200">
-            Record inward stock received into inventory. Increases on-hand
-            stock, converted to Base UOM and committed to the immutable ledger.
-          </div>
+            <div className="rounded-lg bg-emerald-50 p-3 text-xs text-emerald-900 border border-emerald-200">
+              Record incoming stock received into inventory. Increases available stock with complete audit details.
+            </div>
 
           {/* Product selector */}
           <ProductSelector
@@ -1442,8 +1810,8 @@ function AddStockModal({
                   />
                 ) : (
                   <Input
-                    type="number"
-                    step="any"
+                    type="number" step="any"
+                    onWheel={(e) => e.currentTarget.blur()}
                     min="0.000001"
                     placeholder="Enter quantity"
                     value={enteredQty}
@@ -1463,8 +1831,8 @@ function AddStockModal({
                     <span className="text-destructive">*</span>
                   </Label>
                   <Input
-                    type="number"
-                    step="any"
+                    type="number" step="any"
+                    onWheel={(e) => e.currentTarget.blur()}
                     min="0.000001"
                     placeholder={`Actual measured quantity in ${selectedProduct.base_uom?.name}`}
                     value={measuredBaseQty}
@@ -1494,7 +1862,7 @@ function AddStockModal({
                         </strong>
                       </div>
                       <span className="text-[10px] text-emerald-700 italic">
-                        Preview (RPC computes)
+                        Preview (calculated on save)
                       </span>
                     </div>
                     {paanoConversionPreview && (
@@ -1570,8 +1938,10 @@ function AddStockModal({
             </>
           )}
 
-          {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-2 pt-3 border-t">
+          </div>
+
+          {/* Fixed Footer */}
+          <div className="shrink-0 border-t px-5 sm:px-6 py-3 bg-surface/30 flex items-center justify-end gap-2">
             <Button
               type="button"
               variant="outline"
@@ -1910,11 +2280,12 @@ function RemoveStockModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
-      <div ref={formRef} className="relative w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl border my-8">
-        <div className="flex items-center justify-between pb-3 border-b">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4">
+      <div className="w-full max-w-lg bg-card border rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+        {/* Fixed Header */}
+        <div className="flex items-center justify-between border-b px-5 sm:px-6 py-3.5 bg-surface/30 shrink-0">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-700 shrink-0">
               <Minus className="h-4 w-4" />
             </div>
             <div>
@@ -1922,30 +2293,32 @@ function RemoveStockModal({
                 Remove Stock / Dispatch
               </h2>
               <p className="text-xs text-muted-foreground">
-                Outward stock mutation (locked row check at commit)
+                Outward stock dispatch or customer delivery
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-muted-foreground hover:bg-surface"
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted transition-colors"
+            aria-label="Close modal"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        {modalError && (
-          <div role="alert" className="mt-4 flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-xs text-destructive">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>{modalError}</span>
-          </div>
-        )}
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div ref={formRef} className="overflow-y-auto flex-1 min-h-0 p-5 sm:p-6 space-y-4">
+            {modalError && (
+              <div role="alert" className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-xs text-destructive">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{modalError}</span>
+              </div>
+            )}
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          <div className="rounded-lg bg-blue-50 p-3 text-xs text-blue-900 border border-blue-200">
-            Record outward stock dispatch or customer delivery. Deducts from
-            available stock with commit-time verification against negative balances.
-          </div>
+            <div className="rounded-lg bg-blue-50 p-3 text-xs text-blue-900 border border-blue-200">
+              Record outward stock dispatch or customer delivery. Deducts from
+              available stock with commit-time verification against negative balances.
+            </div>
 
           {/* Product selector */}
           <ProductSelector
@@ -2077,8 +2450,8 @@ function RemoveStockModal({
                   />
                 ) : (
                   <Input
-                    type="number"
-                    step="any"
+                    type="number" step="any"
+                    onWheel={(e) => e.currentTarget.blur()}
                     min="0.000001"
                     placeholder="Enter quantity to remove"
                     value={enteredQty}
@@ -2098,8 +2471,8 @@ function RemoveStockModal({
                     <span className="text-destructive">*</span>
                   </Label>
                   <Input
-                    type="number"
-                    step="any"
+                    type="number" step="any"
+                    onWheel={(e) => e.currentTarget.blur()}
                     min="0.000001"
                     placeholder="Measured base quantity"
                     value={measuredBaseQty}
@@ -2205,8 +2578,10 @@ function RemoveStockModal({
             </>
           )}
 
-          {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-2 pt-3 border-t">
+          </div>
+
+          {/* Fixed Footer */}
+          <div className="shrink-0 border-t px-5 sm:px-6 py-3 bg-surface/30 flex items-center justify-end gap-2">
             <Button
               type="button"
               variant="outline"
@@ -2258,6 +2633,7 @@ function OpeningStockModal({
   const [enteredQty, setEnteredQty] = useState("");
   const [rollLabel, setRollLabel] = useState("");
   const [reference, setReference] = useState("");
+  const [useCompoundHelper, setUseCompoundHelper] = useState(false);
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
@@ -2270,6 +2646,11 @@ function OpeningStockModal({
   const selectedProduct = useMemo(() => {
     return products.find((p) => p.id === productId) || null;
   }, [products, productId]);
+
+  const isFeetUom = useMemo(() => {
+    const code = selectedProduct?.base_uom?.code?.toLowerCase() || "";
+    return code === "ft" || code === "feet";
+  }, [selectedProduct]);
 
   const handleProductChange = (id: string) => {
     setProductId(id);
@@ -2321,11 +2702,12 @@ function OpeningStockModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
-      <div ref={formRef} className="relative w-full max-w-md rounded-xl bg-card p-6 shadow-2xl border my-8">
-        <div className="flex items-center justify-between pb-3 border-b">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4">
+      <div className="w-full max-w-lg bg-card border rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+        {/* Fixed Header */}
+        <div className="flex items-center justify-between border-b px-5 sm:px-6 py-3.5 bg-surface/30 shrink-0">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-100 text-purple-700">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-100 text-purple-700 shrink-0">
               <Sparkles className="h-4 w-4" />
             </div>
             <div>
@@ -2339,25 +2721,27 @@ function OpeningStockModal({
           </div>
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-muted-foreground hover:bg-surface"
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted transition-colors"
+            aria-label="Close modal"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        {modalError && (
-          <div role="alert" className="mt-4 flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-xs text-destructive">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>{modalError}</span>
-          </div>
-        )}
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div ref={formRef} className="overflow-y-auto flex-1 min-h-0 p-5 sm:p-6 space-y-4">
+            {modalError && (
+              <div role="alert" className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-xs text-destructive">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{modalError}</span>
+              </div>
+            )}
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          <div className="rounded-lg bg-purple-50 p-3 text-xs text-purple-900 border border-purple-200">
-            Opening stock establishes initial balances. Allowed only when a
-            product has no other stock activity. Bill status is not applicable
-            (NULL).
-          </div>
+            <div className="rounded-lg bg-purple-50 p-3 text-xs text-purple-900 border border-purple-200">
+              Opening stock establishes initial balances. Allowed only when a
+              product has no other stock activity. Bill status is not applicable
+              (NULL).
+            </div>
 
           {/* Product selector */}
           <ProductSelector
@@ -2384,19 +2768,39 @@ function OpeningStockModal({
               )}
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">
-                  Opening Quantity ({selectedProduct.base_uom?.name}) *
-                </Label>
-                <Input
-                  type="number"
-                  step="any"
-                  min="0.000001"
-                  placeholder="Enter initial quantity"
-                  value={enteredQty}
-                  onChange={(e) => setEnteredQty(e.target.value)}
-                  className="h-9 text-xs font-mono"
-                  required
-                />
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold">
+                    Opening Quantity ({selectedProduct.base_uom?.name}) *
+                  </Label>
+                  {isFeetUom && (
+                    <button
+                      type="button"
+                      onClick={() => setUseCompoundHelper(!useCompoundHelper)}
+                      className="text-[11px] font-medium text-purple-700 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Scale className="h-3 w-3" />
+                      {useCompoundHelper ? "Use Decimal input" : "Use Feet + Inches helper"}
+                    </button>
+                  )}
+                </div>
+
+                {isFeetUom && useCompoundHelper ? (
+                  <FeetInchesHelper
+                    onDecimalChange={(val) => setEnteredQty(val)}
+                    currentDecimal={enteredQty}
+                  />
+                ) : (
+                  <Input
+                    type="number" step="any"
+                    min="0.000001"
+                    placeholder="Enter initial quantity"
+                    value={enteredQty}
+                    onChange={(e) => setEnteredQty(e.target.value)}
+                    onWheel={(e) => e.currentTarget.blur()}
+                    className="h-9 text-xs font-mono"
+                    required
+                  />
+                )}
               </div>
 
               {/* Initial Physical Size for sqft products */}
@@ -2436,7 +2840,10 @@ function OpeningStockModal({
             </>
           )}
 
-          <div className="flex items-center justify-end gap-2 pt-3 border-t">
+          </div>
+
+          {/* Fixed Footer */}
+          <div className="shrink-0 border-t px-5 sm:px-6 py-3 bg-surface/30 flex items-center justify-end gap-2">
             <Button
               type="button"
               variant="outline"
@@ -2481,6 +2888,7 @@ function CorrectionModal({
   const [reason, setReason] = useState("");
   const [rollId, setRollId] = useState("");
   const [availableRolls, setAvailableRolls] = useState<RollRecord[]>([]);
+  const [useCompoundHelper, setUseCompoundHelper] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
@@ -2494,6 +2902,11 @@ function CorrectionModal({
   const selectedProduct = useMemo(() => {
     return products.find((p) => p.id === productId) || null;
   }, [products, productId]);
+
+  const isFeetUom = useMemo(() => {
+    const code = selectedProduct?.base_uom?.code?.toLowerCase() || "";
+    return code === "ft" || code === "feet";
+  }, [selectedProduct]);
 
   const currentBalance = useMemo(() => {
     return getProductStockBalance(selectedProduct);
@@ -2570,11 +2983,12 @@ function CorrectionModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
-      <div ref={formRef} className="relative w-full max-w-md rounded-xl bg-card p-6 shadow-2xl border my-8">
-        <div className="flex items-center justify-between pb-3 border-b">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4">
+      <div className="w-full max-w-lg bg-card border rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+        {/* Fixed Header */}
+        <div className="flex items-center justify-between border-b px-5 sm:px-6 py-3.5 bg-surface/30 shrink-0">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-800 shrink-0">
               <SlidersHorizontal className="h-4 w-4" />
             </div>
             <div>
@@ -2588,24 +3002,26 @@ function CorrectionModal({
           </div>
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-muted-foreground hover:bg-surface"
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted transition-colors"
+            aria-label="Close modal"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        {modalError && (
-          <div role="alert" className="mt-4 flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-xs text-destructive">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>{modalError}</span>
-          </div>
-        )}
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div ref={formRef} className="overflow-y-auto flex-1 min-h-0 p-5 sm:p-6 space-y-4">
+            {modalError && (
+              <div role="alert" className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-xs text-destructive">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{modalError}</span>
+              </div>
+            )}
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          <div className="rounded-lg bg-amber-50 p-2.5 text-xs text-amber-900 border border-amber-200">
-            Corrections reconcile physical count discrepancies. The signed delta
-            in Base UOM and mandatory reason are permanently logged.
-          </div>
+            <div className="rounded-lg bg-amber-50 p-2.5 text-xs text-amber-900 border border-amber-200">
+              Corrections reconcile physical count discrepancies. The signed delta
+              in Base UOM and mandatory reason are permanently logged.
+            </div>
 
           {/* Product selector */}
           <ProductSelector
@@ -2673,19 +3089,39 @@ function CorrectionModal({
 
               {/* Quantity */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">
-                  Correction Delta ({selectedProduct.base_uom?.code}) *
-                </Label>
-                <Input
-                  type="number"
-                  step="any"
-                  min="0.000001"
-                  placeholder="e.g. 5 or 2.5"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  className="h-9 text-xs font-mono"
-                  required
-                />
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold">
+                    Correction Delta ({selectedProduct.base_uom?.code}) *
+                  </Label>
+                  {isFeetUom && (
+                    <button
+                      type="button"
+                      onClick={() => setUseCompoundHelper(!useCompoundHelper)}
+                      className="text-[11px] font-medium text-amber-800 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Scale className="h-3 w-3" />
+                      {useCompoundHelper ? "Use Decimal input" : "Use Feet + Inches helper"}
+                    </button>
+                  )}
+                </div>
+
+                {isFeetUom && useCompoundHelper ? (
+                  <FeetInchesHelper
+                    onDecimalChange={(val) => setQuantity(val)}
+                    currentDecimal={quantity}
+                  />
+                ) : (
+                  <Input
+                    type="number" step="any"
+                    min="0.000001"
+                    placeholder="e.g. 5 or 2.5"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    onWheel={(e) => e.currentTarget.blur()}
+                    className="h-9 text-xs font-mono"
+                    required
+                  />
+                )}
               </div>
 
               {/* Mandatory Reason */}
@@ -2743,7 +3179,10 @@ function CorrectionModal({
             </>
           )}
 
-          <div className="flex items-center justify-end gap-2 pt-3 border-t">
+          </div>
+
+          {/* Fixed Footer */}
+          <div className="shrink-0 border-t px-5 sm:px-6 py-3 bg-surface/30 flex items-center justify-end gap-2">
             <Button
               type="button"
               variant="outline"
@@ -2821,11 +3260,12 @@ function ReverseMovementModal({
   const isPositiveOriginal = movement.qty_delta > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
-      <div ref={formRef} className="relative w-full max-w-md rounded-xl bg-card p-6 shadow-2xl border my-8">
-        <div className="flex items-center justify-between pb-3 border-b">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4">
+      <div className="w-full max-w-md bg-card border rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+        {/* Fixed Header */}
+        <div className="flex items-center justify-between border-b px-5 sm:px-6 py-3.5 bg-surface/30 shrink-0">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-100 text-rose-700">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-100 text-rose-700 shrink-0">
               <RotateCcw className="h-4 w-4" />
             </div>
             <div>
@@ -2839,20 +3279,21 @@ function ReverseMovementModal({
           </div>
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-muted-foreground hover:bg-surface"
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted transition-colors"
+            aria-label="Close modal"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        {modalError && (
-          <div role="alert" className="mt-4 flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-xs text-destructive">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>{modalError}</span>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div ref={formRef} className="overflow-y-auto flex-1 min-h-0 p-5 sm:p-6 space-y-4">
+            {modalError && (
+              <div role="alert" className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-xs text-destructive">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{modalError}</span>
+              </div>
+            )}
           <div className="rounded-lg bg-slate-100 p-3 text-xs space-y-1.5 border">
             <div className="font-semibold text-foreground">
               Target Movement Summary:
@@ -2911,7 +3352,10 @@ function ReverseMovementModal({
             />
           </div>
 
-          <div className="flex items-center justify-end gap-2 pt-3 border-t">
+          </div>
+
+          {/* Fixed Footer */}
+          <div className="shrink-0 border-t px-5 sm:px-6 py-3 bg-surface/30 flex items-center justify-end gap-2">
             <Button
               type="button"
               variant="outline"
@@ -2951,11 +3395,12 @@ function MovementDetailModal({
   const baseCode = movement.product?.base_uom?.code || "";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-      <div className="relative w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl border max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between pb-3 border-b">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4">
+      <div className="w-full max-w-xl bg-card border rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+        {/* Fixed Header */}
+        <div className="flex items-center justify-between border-b px-5 sm:px-6 py-3.5 bg-surface/30 shrink-0">
           <div className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-primary" />
+            <FileText className="h-5 w-5 text-primary shrink-0" />
             <div>
               <h2 className="text-base font-bold text-foreground">
                 Movement Record Details
@@ -2967,13 +3412,15 @@ function MovementDetailModal({
           </div>
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-muted-foreground hover:bg-surface"
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted transition-colors"
+            aria-label="Close modal"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="mt-4 space-y-4 text-xs">
+        {/* Scrollable Body */}
+        <div className="overflow-y-auto flex-1 min-h-0 p-5 sm:p-6 space-y-4 text-xs">
           {/* Status Pills */}
           <div className="flex flex-wrap items-center gap-2">
             {renderMovementBadge(movement.movement_type, isReversed)}
@@ -3149,11 +3596,13 @@ function MovementDetailModal({
             </div>
           </div>
 
-          <div className="flex justify-end pt-2">
-            <Button size="sm" variant="outline" onClick={onClose}>
-              Close
-            </Button>
-          </div>
+        </div>
+
+        {/* Fixed Footer */}
+        <div className="shrink-0 border-t px-5 sm:px-6 py-3 bg-surface/30 flex items-center justify-end">
+          <Button size="sm" variant="outline" onClick={onClose}>
+            Close
+          </Button>
         </div>
       </div>
     </div>
