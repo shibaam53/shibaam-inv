@@ -114,8 +114,9 @@ describe("formatPhysicalSize", () => {
     expect(formatPhysicalSize("41.75", 4, "ft")).toBe("4 ft × 41.75 ft");
   });
 
-  it("handles linear meters (m) converted to feet", () => {
+  it("handles linear meters (m and mtr) converted to feet", () => {
     expect(formatPhysicalSize(10, 4, "m")).toBe("4 ft × 32.808 ft");
+    expect(formatPhysicalSize(10, 4, "mtr")).toBe("4 ft × 32.808 ft");
   });
 
   it("handles sheets with spec length", () => {
@@ -161,28 +162,36 @@ describe("convertPaanoDimension", () => {
     expect(result?.toString()).toBe("80");
   });
 
-  it("converts sqm to ft using Paano", () => {
+  it("converts sqm and sqmtr to ft using Paano", () => {
     // 10 sqm / 0.09290304 sqft/m² / 4 ft = 26.9097760434... ft
-    const result = convertPaanoDimension(10, "sqm", "ft", 4);
-    expect(result?.toFixed(4)).toBe("26.9098");
+    const result1 = convertPaanoDimension(10, "sqm", "ft", 4);
+    expect(result1?.toFixed(4)).toBe("26.9098");
+    const result2 = convertPaanoDimension(10, "sqmtr", "ft", 4);
+    expect(result2?.toFixed(4)).toBe("26.9098");
   });
 
-  it("converts m to sqft using Paano", () => {
+  it("converts m and mtr to sqft using Paano", () => {
     // 10 m / 0.3048 ft/m * 4 ft = 131.2335958... sqft
-    const result = convertPaanoDimension(10, "m", "sqft", 4);
-    expect(result?.toFixed(4)).toBe("131.2336");
+    const result1 = convertPaanoDimension(10, "m", "sqft", 4);
+    expect(result1?.toFixed(4)).toBe("131.2336");
+    const result2 = convertPaanoDimension(10, "mtr", "sqft", 4);
+    expect(result2?.toFixed(4)).toBe("131.2336");
   });
 
-  it("converts sqft to m using Paano", () => {
+  it("converts sqft to m and mtr using Paano", () => {
     // 80 sqft / 4 ft = 20 ft * 0.3048 = 6.096 m
-    const result = convertPaanoDimension(80, "sqft", "m", 4);
-    expect(result?.toString()).toBe("6.096");
+    const result1 = convertPaanoDimension(80, "sqft", "m", 4);
+    expect(result1?.toString()).toBe("6.096");
+    const result2 = convertPaanoDimension(80, "sqft", "mtr", 4);
+    expect(result2?.toString()).toBe("6.096");
   });
 
-  it("converts ft to sqm using Paano", () => {
+  it("converts ft to sqm and sqmtr using Paano", () => {
     // 20 ft * 4 ft = 80 sqft * 0.09290304 = 7.4322432 sqm
-    const result = convertPaanoDimension(20, "ft", "sqm", 4);
-    expect(result?.toString()).toBe("7.4322432");
+    const result1 = convertPaanoDimension(20, "ft", "sqm", 4);
+    expect(result1?.toString()).toBe("7.4322432");
+    const result2 = convertPaanoDimension(20, "ft", "sqmtr", 4);
+    expect(result2?.toString()).toBe("7.4322432");
   });
 
   it("converts in to sqft using Paano", () => {

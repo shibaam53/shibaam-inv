@@ -104,6 +104,7 @@ export function convertPaanoToFeet(
     case "inch":
     case "inches":
       return d.dividedBy(12);
+    case "mtr":
     case "m":
     case "meter":
     case "meters":
@@ -159,15 +160,16 @@ export function convertPaanoDimension(
     const from = fromUomCode.trim().toLowerCase();
     const to = toUomCode.trim().toLowerCase();
 
-    const isArea = (code: string) => code === "sqft" || code === "sqm";
+    const isArea = (code: string) =>
+      code === "sqft" || code === "sqm" || code === "sqmtr";
     const isLength = (code: string) =>
-      code === "ft" || code === "m" || code === "in" || code === "mm";
+      code === "ft" || code === "m" || code === "mtr" || code === "in" || code === "mm";
 
     // 1. Convert Area to Length: Length = Area ÷ Width
     if (isArea(from) && isLength(to)) {
       // Step A: Normalize Area to square feet (sqft)
       const areaSqft =
-        from === "sqm"
+        from === "sqm" || from === "sqmtr"
           ? q.dividedBy("0.09290304")
           : q;
 
@@ -179,6 +181,7 @@ export function convertPaanoDimension(
         case "ft":
           return lengthFt;
         case "m":
+        case "mtr":
           return lengthFt.times("0.3048");
         case "in":
           return lengthFt.times(12);
@@ -198,6 +201,7 @@ export function convertPaanoDimension(
           lengthFt = q;
           break;
         case "m":
+        case "mtr":
           lengthFt = q.dividedBy("0.3048");
           break;
         case "in":
@@ -214,7 +218,7 @@ export function convertPaanoDimension(
       const areaSqft = lengthFt.times(widthFt);
 
       // Step C: Convert square feet to target area unit
-      if (to === "sqm") {
+      if (to === "sqm" || to === "sqmtr") {
         return areaSqft.times("0.09290304");
       }
       return areaSqft;
@@ -275,13 +279,19 @@ export function formatPhysicalSize(
     }
 
     // 3. Linear Meters
-    if (uom === "m" || uom === "meter" || uom === "meters") {
+    if (uom === "mtr" || uom === "m" || uom === "meter" || uom === "meters") {
       const lengthInFeet = stock.dividedBy("0.3048");
       return `${formatQty(width)} ft × ${formatQty(lengthInFeet)} ft`;
     }
 
     // 4. Square Meters (Area)
-    if (uom === "sqm" || uom === "m2" || uom === "sq_m" || uom === "sq.m") {
+    if (
+      uom === "sqmtr" ||
+      uom === "sqm" ||
+      uom === "m2" ||
+      uom === "sq_m" ||
+      uom === "sq.m"
+    ) {
       const areaInSqft = stock.dividedBy("0.3048").dividedBy("0.3048");
       const length = areaInSqft.dividedBy(width);
       return `${formatQty(width)} ft × ${formatQty(length)} ft`;

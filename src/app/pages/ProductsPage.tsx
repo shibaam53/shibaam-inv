@@ -1246,7 +1246,7 @@ function ProductFormModal({
             <Label htmlFor="prod-desc">Description (optional)</Label>
             <Input
               id="prod-desc"
-              placeholder="e.g. 0.10mm wire diameter, plain weave, 1m width"
+              placeholder="e.g. 0.10mm wire diameter, plain weave, 1mtr width"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               disabled={isPending}
@@ -1395,7 +1395,7 @@ function ProductFormModal({
                 >
                   <option value="ft">ft (Feet)</option>
                   <option value="in">in (Inches)</option>
-                  <option value="m">m (Meters)</option>
+                  <option value="mtr">mtr (Meters)</option>
                   <option value="mm">mm (Millimeters)</option>
                 </select>
               </div>

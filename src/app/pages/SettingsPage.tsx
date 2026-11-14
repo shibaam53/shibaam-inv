@@ -485,9 +485,9 @@ function UomsSection() {
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 disabled={isPending}
               >
-                <option value="length">Length (e.g. m, ft, mm)</option>
+                <option value="length">Length (e.g. mtr, ft, mm)</option>
                 <option value="weight">Weight (e.g. kg, g)</option>
-                <option value="area">Area (e.g. sqm, sqft)</option>
+                <option value="area">Area (e.g. sqmtr, sqft)</option>
                 <option value="count">
                   Count / Packaging (e.g. roll, pcs, sheets)
                 </option>

@@ -15,14 +15,14 @@ update public.profiles set is_active = false   where id = '00000000-0000-0000-00
 
 insert into public.products (id, code, name, base_uom_id, tracking_mode) values
   ('a0000000-0000-0000-0000-000000000001', 'AGG-1', 'Aggregate product',
-     (select id from public.uoms where code = 'm'), 'aggregate'),
+     (select id from public.uoms where code = 'mtr'), 'aggregate'),
   ('a0000000-0000-0000-0000-000000000002', 'ROLL-1', 'Roll product',
-     (select id from public.uoms where code = 'm'), 'roll'),
+     (select id from public.uoms where code = 'mtr'), 'roll'),
   ('a0000000-0000-0000-0000-000000000003', 'PERF-1', 'Perforated sheet',
-     (select id from public.uoms where code = 'sqm'), 'aggregate');
+     (select id from public.uoms where code = 'sqmtr'), 'aggregate');
 insert into public.products (id, code, name, base_uom_id, status) values
   ('a0000000-0000-0000-0000-000000000004', 'OLD-1', 'Archived product',
-     (select id from public.uoms where code = 'm'), 'archived');
+     (select id from public.uoms where code = 'mtr'), 'archived');
 
 insert into public.product_uoms (product_id, uom_id, requires_measurement) values
   ('a0000000-0000-0000-0000-000000000001', (select id from public.uoms where code = 'ft'), false),
@@ -38,7 +38,7 @@ select is((select count(*)::int from public.stock_balances), 4, 'a balance row i
 set local role anon;
 select throws_ok($$ select * from public.products $$, '42501', null, 'anon cannot read products');
 select throws_ok($$ select public.add_stock('a0000000-0000-0000-0000-000000000001', '1',
-  (select id from public.uoms where code = 'm'), 'with_bill') $$, '42501', null, 'anon cannot call add_stock');
+  (select id from public.uoms where code = 'mtr'), 'with_bill') $$, '42501', null, 'anon cannot call add_stock');
 reset role;
 
 -- =============================================================== normal user ==
@@ -47,16 +47,16 @@ set local role authenticated;
 
 select is((select count(*)::int from public.products), 4, 'normal user can read products');
 select throws_ok($$ insert into public.products (code, name, base_uom_id)
-  values ('X', 'X', (select id from public.uoms where code = 'm')) $$, '42501', null,
+  values ('X', 'X', (select id from public.uoms where code = 'mtr')) $$, '42501', null,
   'normal user cannot create products');
 select throws_ok($$ update public.profiles set role = 'super_user'
   where id = '00000000-0000-0000-0000-000000000002' $$, '42501', null,
   'normal user cannot promote themselves');
 select throws_ok($$ insert into public.conversion_rules (from_uom_id, to_uom_id, factor)
-  values ((select id from public.uoms where code = 'ft'), (select id from public.uoms where code = 'm'), 1) $$,
+  values ((select id from public.uoms where code = 'ft'), (select id from public.uoms where code = 'mtr'), 1) $$,
   '42501', null, 'normal user cannot create conversion rules');
 select throws_ok($$ select public.set_opening_stock('a0000000-0000-0000-0000-000000000001', '100',
-  (select id from public.uoms where code = 'm')) $$, '42501', 'not_authorized',
+  (select id from public.uoms where code = 'mtr')) $$, '42501', 'not_authorized',
   'normal user cannot set opening stock');
 select throws_ok($$ select public.correct_stock('a0000000-0000-0000-0000-000000000001', '5', 'x') $$,
   '42501', 'not_authorized', 'normal user cannot correct stock');
@@ -65,7 +65,7 @@ select throws_ok($$ update public.stock_balances set quantity = 999 $$, '42501',
 select throws_ok($$ insert into public.stock_movements (product_id, movement_type, bill_status, qty_delta,
   entered_qty, entered_uom_id, balance_before, balance_after, created_by)
   values ('a0000000-0000-0000-0000-000000000001', 'add', 'with_bill', 1, 1,
-  (select id from public.uoms where code = 'm'), 0, 1, '00000000-0000-0000-0000-000000000002') $$,
+  (select id from public.uoms where code = 'mtr'), 0, 1, '00000000-0000-0000-0000-000000000002') $$,
   '42501', null, 'normal user cannot write the ledger directly');
 reset role;
 
@@ -73,7 +73,7 @@ reset role;
 do $$ begin perform set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', true); end $$;
 set local role authenticated;
 select lives_ok($$ select public.set_opening_stock('a0000000-0000-0000-0000-000000000001', '100',
-  (select id from public.uoms where code = 'm'), null, null, 'opening count') $$,
+  (select id from public.uoms where code = 'mtr'), null, null, 'opening count') $$,
   'super user can set opening stock');
 select is((select quantity from public.stock_balances where product_id = 'a0000000-0000-0000-0000-000000000001'),
   100::numeric, 'opening stock sets the balance');
@@ -86,27 +86,27 @@ do $$ begin perform set_config('request.jwt.claim.sub', '00000000-0000-0000-0000
 set local role authenticated;
 
 select throws_ok($$ select public.add_stock('a0000000-0000-0000-0000-000000000001', '5',
-  (select id from public.uoms where code = 'm'), null) $$, '23502', 'bill_status_required',
+  (select id from public.uoms where code = 'mtr'), null) $$, '23502', 'bill_status_required',
   'add_stock rejects a missing bill status');
 select throws_ok($$ select public.remove_stock('a0000000-0000-0000-0000-000000000001', '5',
-  (select id from public.uoms where code = 'm'), null) $$, '23502', 'bill_status_required',
+  (select id from public.uoms where code = 'mtr'), null) $$, '23502', 'bill_status_required',
   'remove_stock rejects a missing bill status');
 select lives_ok($$ select public.add_stock('a0000000-0000-0000-0000-000000000001', '50',
-  (select id from public.uoms where code = 'm'), 'with_bill') $$, 'normal user can add stock with bill');
+  (select id from public.uoms where code = 'mtr'), 'with_bill') $$, 'normal user can add stock with bill');
 select is((select quantity from public.stock_balances where product_id = 'a0000000-0000-0000-0000-000000000001'),
   150::numeric, 'balance increased by 50');
 select lives_ok($$ select public.remove_stock('a0000000-0000-0000-0000-000000000001', '30',
-  (select id from public.uoms where code = 'm'), 'without_bill') $$, 'normal user can remove stock without bill');
+  (select id from public.uoms where code = 'mtr'), 'without_bill') $$, 'normal user can remove stock without bill');
 select is((select quantity from public.stock_balances where product_id = 'a0000000-0000-0000-0000-000000000001'),
   120::numeric, 'balance decreased by 30 (bill status does not split stock)');
 select throws_ok($$ select public.remove_stock('a0000000-0000-0000-0000-000000000001', '500',
-  (select id from public.uoms where code = 'm'), 'with_bill') $$, '23514', 'insufficient_stock',
+  (select id from public.uoms where code = 'mtr'), 'with_bill') $$, '23514', 'insufficient_stock',
   'negative stock is rejected');
 select throws_ok($$ select public.add_stock('a0000000-0000-0000-0000-000000000001', '-5',
-  (select id from public.uoms where code = 'm'), 'with_bill') $$, '22023', 'invalid_quantity',
+  (select id from public.uoms where code = 'mtr'), 'with_bill') $$, '22023', 'invalid_quantity',
   'negative quantity input is rejected');
 select throws_ok($$ select public.add_stock('a0000000-0000-0000-0000-000000000004', '5',
-  (select id from public.uoms where code = 'm'), 'with_bill') $$, '23514', 'product_archived',
+  (select id from public.uoms where code = 'mtr'), 'with_bill') $$, '23514', 'product_archived',
   'archived products cannot be moved');
 select throws_ok($$ select public.add_stock('a0000000-0000-0000-0000-000000000001', '5',
   (select id from public.uoms where code = 'kg'), 'with_bill') $$, '22023', 'uom_not_permitted',
@@ -127,7 +127,7 @@ reset role;
 -- Test-only factor (the real factors are pending client verification).
 insert into public.conversion_rules (id, from_uom_id, to_uom_id, factor)
 values ('c0000000-0000-0000-0000-000000000001', (select id from public.uoms where code = 'ft'),
-        (select id from public.uoms where code = 'm'), 0.3048);
+        (select id from public.uoms where code = 'mtr'), 0.3048);
 
 do $$ begin perform set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000002', true); end $$;
 set local role authenticated;
@@ -164,19 +164,19 @@ reset role;
 do $$ begin perform set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000002', true); end $$;
 set local role authenticated;
 select throws_ok($$ select public.add_stock('a0000000-0000-0000-0000-000000000002', '40',
-  (select id from public.uoms where code = 'm'), 'with_bill') $$, '23502', 'roll_label_required',
+  (select id from public.uoms where code = 'mtr'), 'with_bill') $$, '23502', 'roll_label_required',
   'a roll product requires a roll label on add');
 select lives_ok($$ select public.add_stock('a0000000-0000-0000-0000-000000000002', '40',
-  (select id from public.uoms where code = 'm'), 'with_bill', null, 'R-001') $$, 'a roll is created on add');
+  (select id from public.uoms where code = 'mtr'), 'with_bill', null, 'R-001') $$, 'a roll is created on add');
 select is((select remaining_qty from public.stock_rolls where label = 'R-001'), 40::numeric, 'roll holds the measured quantity');
 select throws_ok($$ select public.remove_stock('a0000000-0000-0000-0000-000000000002', '5',
-  (select id from public.uoms where code = 'm'), 'with_bill') $$, '23502', 'roll_required',
+  (select id from public.uoms where code = 'mtr'), 'with_bill') $$, '23502', 'roll_required',
   'a roll product requires a roll on remove');
 select lives_ok($$ select public.remove_stock('a0000000-0000-0000-0000-000000000002', '15',
-  (select id from public.uoms where code = 'm'), 'with_bill', null,
+  (select id from public.uoms where code = 'mtr'), 'with_bill', null,
   (select id from public.stock_rolls where label = 'R-001')) $$, 'remove consumes from a specific roll');
 select throws_ok($$ select public.remove_stock('a0000000-0000-0000-0000-000000000002', '30',
-  (select id from public.uoms where code = 'm'), 'with_bill', null,
+  (select id from public.uoms where code = 'mtr'), 'with_bill', null,
   (select id from public.stock_rolls where label = 'R-001')) $$, '23514', 'insufficient_roll_stock',
   'cannot remove more than the roll holds');
 select is((select remaining_qty from public.stock_rolls where label = 'R-001'), 25::numeric, 'roll remaining is 25');
@@ -192,7 +192,7 @@ select lives_ok($$ select public.correct_stock('a0000000-0000-0000-0000-00000000
 select is((select quantity from public.stock_balances where product_id = 'a0000000-0000-0000-0000-000000000001'),
   143.548::numeric, 'correction changed the balance by -5');
 select throws_ok($$ select public.set_opening_stock('a0000000-0000-0000-0000-000000000001', '5',
-  (select id from public.uoms where code = 'm')) $$, '23514', 'opening_not_allowed: product already has stock activity',
+  (select id from public.uoms where code = 'mtr')) $$, '23514', 'opening_not_allowed: product already has stock activity',
   'opening stock is blocked once there is other activity');
 select lives_ok($$ select public.reverse_stock_movement(
   (select id from public.stock_movements where qty_delta = -30), 'entered by mistake') $$,
@@ -252,7 +252,7 @@ reset role;
 do $$ begin perform set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', true); end $$;
 set local role authenticated;
 select lives_ok($$ select public.set_opening_stock('a0000000-0000-0000-0000-000000000003', '10',
-  (select id from public.uoms where code = 'sqm')) $$, 'opening stock on the perforated product');
+  (select id from public.uoms where code = 'sqmtr')) $$, 'opening stock on the perforated product');
 reset role;
 select throws_ok($$ update public.product_perforation set pitch_mm = 5
   where product_id = 'a0000000-0000-0000-0000-000000000003' $$, '23514', null,
@@ -263,7 +263,7 @@ do $$ begin perform set_config('request.jwt.claim.sub', '00000000-0000-0000-0000
 set local role authenticated;
 select is((select count(*)::int from public.products), 0, 'a deactivated user reads nothing');
 select throws_ok($$ select public.add_stock('a0000000-0000-0000-0000-000000000001', '1',
-  (select id from public.uoms where code = 'm'), 'with_bill') $$, '42501', 'not_authorized',
+  (select id from public.uoms where code = 'mtr'), 'with_bill') $$, '42501', 'not_authorized',
   'a deactivated user cannot move stock');
 reset role;
 
