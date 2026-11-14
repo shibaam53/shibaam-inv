@@ -1,6 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import {
-  Users,
   UserPlus,
   Shield,
   ShieldCheck,
@@ -16,6 +15,9 @@ import {
   User,
   KeyRound,
   Info,
+  RotateCcw,
+  Calendar,
+  SearchX,
 } from "lucide-react";
 import {
   Card,
@@ -36,6 +38,13 @@ import type { Database } from "@/types/database";
 
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 export type UserRole = Database["public"]["Enums"]["user_role"];
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "U";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 
 export default function UsersPage() {
   const { profile: currentProfile } = useAuth();
@@ -122,6 +131,21 @@ export default function UsersPage() {
     });
   }, [profiles, searchQuery, roleFilter, statusFilter]);
 
+  // Active filters detection and reset handler
+  const hasActiveFilters = useMemo(() => {
+    return (
+      searchQuery.trim() !== "" ||
+      roleFilter !== "all" ||
+      statusFilter !== "all"
+    );
+  }, [searchQuery, roleFilter, statusFilter]);
+
+  const handleResetFilters = () => {
+    setSearchQuery("");
+    setRoleFilter("all");
+    setStatusFilter("all");
+  };
+
   // Summary counts
   const stats = useMemo(() => {
     const total = profiles.length;
@@ -151,13 +175,13 @@ export default function UsersPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <Button
             variant="outline"
             size="sm"
             onClick={() => void loadUsers()}
             disabled={loading}
-            className="text-xs flex items-center gap-1.5"
+            className="flex-1 sm:flex-none text-xs flex items-center justify-center gap-1.5 min-h-[38px] font-medium"
           >
             <RefreshCw
               className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
@@ -168,7 +192,7 @@ export default function UsersPage() {
           <Button
             size="sm"
             onClick={() => setIsAddModalOpen(true)}
-            className="text-xs bg-brand-blue hover:bg-brand-blue/90 text-white flex items-center gap-1.5 shadow-xs"
+            className="flex-1 sm:flex-none text-xs bg-brand-blue hover:bg-brand-blue/90 text-white flex items-center justify-center gap-1.5 shadow-xs min-h-[38px] font-medium"
           >
             <UserPlus className="h-3.5 w-3.5" />
             Add Staff Member
@@ -209,47 +233,47 @@ export default function UsersPage() {
 
       {/* Quick Metrics */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Card className="p-3 bg-surface border">
+        <div className="rounded-lg border bg-card p-3.5 shadow-2xs">
           <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
             Total Staff
           </div>
           <div className="mt-1 text-2xl font-bold font-mono text-foreground">
             {stats.total}
           </div>
-        </Card>
+        </div>
 
-        <Card className="p-3 bg-surface border">
-          <div className="text-[11px] font-medium text-emerald-700 uppercase tracking-wider">
+        <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/40 p-3.5 shadow-2xs">
+          <div className="text-[11px] font-semibold text-emerald-800 uppercase tracking-wider">
             Active Accounts
           </div>
           <div className="mt-1 text-2xl font-bold font-mono text-emerald-700">
             {stats.active}
           </div>
-        </Card>
+        </div>
 
-        <Card className="p-3 bg-surface border">
-          <div className="text-[11px] font-medium text-blue-700 uppercase tracking-wider">
+        <div className="rounded-lg border border-blue-200/80 bg-blue-50/40 p-3.5 shadow-2xs">
+          <div className="text-[11px] font-semibold text-blue-800 uppercase tracking-wider">
             Super Users
           </div>
           <div className="mt-1 text-2xl font-bold font-mono text-blue-700">
             {stats.superUsers}
           </div>
-        </Card>
+        </div>
 
-        <Card className="p-3 bg-surface border">
-          <div className="text-[11px] font-medium text-slate-700 uppercase tracking-wider">
+        <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3.5 shadow-2xs">
+          <div className="text-[11px] font-semibold text-slate-700 uppercase tracking-wider">
             Normal Users
           </div>
           <div className="mt-1 text-2xl font-bold font-mono text-slate-700">
             {stats.normalUsers}
           </div>
-        </Card>
+        </div>
       </div>
 
-      {/* Main Table Card */}
-      <Card className="border shadow-xs">
+      {/* Main Staff Accounts Card */}
+      <Card className="border shadow-2xs">
         <CardHeader className="p-4 border-b">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <CardTitle className="text-base font-semibold">
                 Staff Accounts
@@ -261,42 +285,84 @@ export default function UsersPage() {
             </div>
 
             {/* Filter controls */}
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative min-w-[200px]">
-                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              {/* Search input: expands naturally */}
+              <div className="relative flex-1 sm:min-w-[200px]">
+                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
                 <Input
                   placeholder="Search name or ID…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-8 pl-8 text-xs bg-background"
+                  className="h-8 pl-8 pr-7 text-xs bg-background w-full"
                 />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
+                    title="Clear search"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
 
-              <select
-                value={roleFilter}
-                onChange={(e) =>
-                  setRoleFilter(e.target.value as "all" | UserRole)
-                }
-                className="h-8 rounded-md border border-input bg-background px-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="all">All Roles</option>
-                <option value="super_user">Super User</option>
-                <option value="normal_user">Normal User</option>
-              </select>
+              {/* Dropdowns + Reset Button Container */}
+              <div className="flex items-center gap-2">
+                <div className="grid grid-cols-2 gap-2 flex-1 sm:flex sm:items-center sm:gap-2">
+                  <select
+                    value={roleFilter}
+                    onChange={(e) =>
+                      setRoleFilter(e.target.value as "all" | UserRole)
+                    }
+                    className="h-8 rounded-md border border-input bg-background px-2.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring min-w-0"
+                  >
+                    <option value="all">All Roles</option>
+                    <option value="super_user">Super User</option>
+                    <option value="normal_user">Normal User</option>
+                  </select>
 
-              <select
-                value={statusFilter}
-                onChange={(e) =>
-                  setStatusFilter(
-                    e.target.value as "all" | "active" | "inactive",
-                  )
-                }
-                className="h-8 rounded-md border border-input bg-background px-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="all">All Status</option>
-                <option value="active">Active Only</option>
-                <option value="inactive">Deactivated Only</option>
-              </select>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) =>
+                      setStatusFilter(
+                        e.target.value as "all" | "active" | "inactive",
+                      )
+                    }
+                    className="h-8 rounded-md border border-input bg-background px-2.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring min-w-0"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="active">Active Only</option>
+                    <option value="inactive">Deactivated Only</option>
+                  </select>
+                </div>
+
+                {/* Reset filters button */}
+                <div className="relative inline-flex items-center group shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleResetFilters}
+                    disabled={!hasActiveFilters}
+                    title="Reset filters"
+                    aria-label="Reset filters"
+                    className={`h-8 w-8 rounded-md flex items-center justify-center transition-all ${
+                      hasActiveFilters
+                        ? "text-muted-foreground hover:text-foreground hover:bg-muted border border-input shadow-2xs cursor-pointer"
+                        : "text-muted-foreground/25 border border-transparent cursor-default pointer-events-none opacity-40"
+                    }`}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </button>
+                  {hasActiveFilters && (
+                    <div className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col items-center z-30">
+                      <span className="rounded bg-navy px-2 py-0.5 text-[10px] font-medium text-white shadow-xs whitespace-nowrap">
+                        Reset filters
+                      </span>
+                      <span className="h-1 w-1 -mt-0.5 rotate-45 bg-navy" />
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -308,155 +374,315 @@ export default function UsersPage() {
               Loading staff accounts…
             </div>
           ) : filteredProfiles.length === 0 ? (
-            <div className="p-8 text-center text-xs text-muted-foreground">
-              <Users className="h-8 w-8 mx-auto mb-2 text-muted-foreground/60" />
-              {searchQuery || roleFilter !== "all" || statusFilter !== "all"
-                ? "No staff accounts match your filters."
-                : "No staff accounts registered yet."}
+            <div className="p-8 text-center bg-card">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <SearchX className="h-6 w-6" />
+              </div>
+              <h3 className="mt-3 text-sm font-semibold text-foreground">
+                {hasActiveFilters
+                  ? "No staff accounts match your filters"
+                  : "No staff accounts registered"}
+              </h3>
+              <p className="mt-1 text-xs text-muted-foreground max-w-sm mx-auto">
+                {hasActiveFilters
+                  ? "Try resetting your search query or role/status filters to view all staff members."
+                  : "No staff member profiles are currently found in the system database."}
+              </p>
+              {hasActiveFilters && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleResetFilters}
+                  className="mt-4 text-xs font-semibold"
+                >
+                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Clear Filters
+                </Button>
+              )}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-surface border-b text-muted-foreground font-medium">
-                  <tr>
-                    <th className="py-2.5 px-4 font-semibold">Staff Member</th>
-                    <th className="py-2.5 px-4 font-semibold">Role</th>
-                    <th className="py-2.5 px-4 font-semibold">Status</th>
-                    <th className="py-2.5 px-4 font-semibold">Created</th>
-                    <th className="py-2.5 px-4 font-semibold text-right">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filteredProfiles.map((p) => {
-                    const isSelf = p.id === currentProfile?.id;
-                    return (
-                      <tr
-                        key={p.id}
-                        className={`hover:bg-muted/40 transition-colors ${
-                          !p.is_active ? "opacity-60 bg-muted/20" : ""
-                        }`}
-                      >
-                        {/* Name */}
-                        <td className="py-3 px-4 font-medium text-foreground">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-foreground">
-                              {p.full_name || "Unnamed User"}
-                            </span>
-                            {isSelf && (
-                              <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-800">
-                                You
-                              </span>
-                            )}
-                            <button
-                              onClick={() => setUserToEditName(p)}
-                              title="Edit Display Name"
-                              className="text-muted-foreground hover:text-foreground opacity-60 hover:opacity-100"
-                            >
-                              <Edit2 className="h-3 w-3" />
-                            </button>
+            <>
+              {/* MOBILE CARDS VIEW (< md) - Touch-friendly card representation */}
+              <div className="block md:hidden divide-y divide-border">
+                {filteredProfiles.map((p) => {
+                  const isSelf = p.id === currentProfile?.id;
+                  const initials = getInitials(p.full_name || "User");
+
+                  return (
+                    <div
+                      key={p.id}
+                      className={`p-4 space-y-3.5 transition-colors ${
+                        !p.is_active ? "bg-muted/15" : "bg-card"
+                      }`}
+                    >
+                      {/* Card Header: Avatar + Name + You Badge + Edit Action */}
+                      <div className="flex items-start justify-between gap-2.5">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="h-9 w-9 rounded-full bg-brand-blue/10 text-brand-blue font-bold text-xs flex items-center justify-center shrink-0 border border-brand-blue/20">
+                            {initials}
                           </div>
-                        </td>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <h3 className="font-semibold text-sm text-foreground truncate">
+                                {p.full_name || "Unnamed User"}
+                              </h3>
+                              {isSelf && (
+                                <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-800 shrink-0">
+                                  You
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 text-[11px] text-muted-foreground mt-0.5">
+                              <Calendar className="h-3 w-3 shrink-0" />
+                              <span>Joined {formatDateTime(p.created_at)}</span>
+                            </div>
+                          </div>
+                        </div>
 
-                        {/* Role */}
-                        <td className="py-3 px-4">
-                          {p.role === "super_user" ? (
-                            <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-800 border border-blue-200">
-                              <ShieldCheck className="h-3 w-3 text-blue-700" />
-                              Super User
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 border border-slate-200">
-                              <Shield className="h-3 w-3 text-slate-500" />
-                              Normal User
-                            </span>
-                          )}
-                        </td>
+                        {/* Edit Name Icon Button */}
+                        <button
+                          onClick={() => setUserToEditName(p)}
+                          title="Edit Display Name"
+                          aria-label={`Edit name for ${p.full_name || "user"}`}
+                          className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted border border-border/60 transition-colors shrink-0"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
 
-                        {/* Status */}
-                        <td className="py-3 px-4">
-                          {p.is_active ? (
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800 border border-emerald-200">
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 animate-pulse" />
-                              Active
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-800 border border-rose-200">
-                              <span className="h-1.5 w-1.5 rounded-full bg-rose-600" />
-                              Deactivated
-                            </span>
-                          )}
-                        </td>
+                      {/* Badges Row: Role + Status side-by-side */}
+                      <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                        {p.role === "super_user" ? (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-800 border border-blue-200">
+                            <ShieldCheck className="h-3.5 w-3.5 text-blue-700" />
+                            Super User
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 border border-slate-200">
+                            <Shield className="h-3.5 w-3.5 text-slate-500" />
+                            Normal User
+                          </span>
+                        )}
 
-                        {/* Created At */}
-                        <td className="py-3 px-4 text-muted-foreground whitespace-nowrap">
-                          {formatDateTime(p.created_at)}
-                        </td>
+                        {p.is_active ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 border border-emerald-200">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                            Active
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-800 border border-rose-200">
+                            <span className="h-1.5 w-1.5 rounded-full bg-rose-600" />
+                            Deactivated
+                          </span>
+                        )}
+                      </div>
 
-                        {/* Actions */}
-                        <td className="py-3 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
+                      {/* Card Action Footer */}
+                      <div className="pt-2">
+                        {isSelf ? (
+                          <div className="rounded-md bg-muted/50 px-2.5 py-2 text-[11px] text-muted-foreground flex items-center gap-2 border border-border/40">
+                            <Shield className="h-3.5 w-3.5 shrink-0 text-muted-foreground/80" />
+                            <span>
+                              Your account — protected from self-modification.
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-2">
                             {/* Role Toggle Button */}
                             <Button
-                              variant="ghost"
+                              variant="outline"
                               size="sm"
                               onClick={() => setUserToChangeRole(p)}
-                              disabled={isSelf}
-                              title={
-                                isSelf
-                                  ? "Cannot change your own role"
-                                  : `Change role to ${
-                                      p.role === "super_user"
-                                        ? "Normal User"
-                                        : "Super User"
-                                    }`
-                              }
-                              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                              className="text-xs font-medium min-h-[38px] flex items-center justify-center gap-1.5"
                             >
-                              <Shield className="h-3.5 w-3.5 mr-1" />
-                              {p.role === "super_user" ? "Demote" : "Promote"}
+                              <Shield className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                              {p.role === "super_user"
+                                ? "Demote to Normal"
+                                : "Promote to Super"}
                             </Button>
 
                             {/* Active/Deactivate Button */}
                             <Button
-                              variant="ghost"
+                              variant="outline"
                               size="sm"
                               onClick={() => setUserToToggleStatus(p)}
-                              disabled={isSelf}
-                              title={
-                                isSelf
-                                  ? "Cannot deactivate your own account"
-                                  : p.is_active
-                                    ? "Deactivate account"
-                                    : "Activate account"
-                              }
-                              className={`h-7 px-2 text-xs ${
+                              className={`text-xs font-medium min-h-[38px] flex items-center justify-center gap-1.5 ${
                                 p.is_active
-                                  ? "text-rose-700 hover:text-rose-900 hover:bg-rose-50"
-                                  : "text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50"
+                                  ? "border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800 hover:border-rose-300"
+                                  : "border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300"
                               }`}
                             >
                               {p.is_active ? (
                                 <>
-                                  <UserX className="h-3.5 w-3.5 mr-1" />
+                                  <UserX className="h-3.5 w-3.5 shrink-0" />
                                   Deactivate
                                 </>
                               ) : (
                                 <>
-                                  <UserCheck className="h-3.5 w-3.5 mr-1" />
+                                  <UserCheck className="h-3.5 w-3.5 shrink-0" />
                                   Activate
                                 </>
                               )}
                             </Button>
                           </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* DESKTOP TABLE VIEW (md+) - Full authoritative master table */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-surface border-b text-muted-foreground font-medium">
+                    <tr>
+                      <th className="py-2.5 px-4 font-semibold">Staff Member</th>
+                      <th className="py-2.5 px-4 font-semibold">Role</th>
+                      <th className="py-2.5 px-4 font-semibold">Status</th>
+                      <th className="py-2.5 px-4 font-semibold">Created</th>
+                      <th className="py-2.5 px-4 font-semibold text-right">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filteredProfiles.map((p) => {
+                      const isSelf = p.id === currentProfile?.id;
+                      const initials = getInitials(p.full_name || "User");
+
+                      return (
+                        <tr
+                          key={p.id}
+                          className={`hover:bg-muted/40 transition-colors ${
+                            !p.is_active ? "opacity-60 bg-muted/20" : ""
+                          }`}
+                        >
+                          {/* Name + Avatar */}
+                          <td className="py-3 px-4 font-medium text-foreground">
+                            <div className="flex items-center gap-2.5">
+                              <div className="h-7 w-7 rounded-full bg-brand-blue/10 text-brand-blue font-bold text-[10px] flex items-center justify-center shrink-0 border border-brand-blue/20">
+                                {initials}
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold text-foreground">
+                                  {p.full_name || "Unnamed User"}
+                                </span>
+                                {isSelf && (
+                                  <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-800">
+                                    You
+                                  </span>
+                                )}
+                                <button
+                                  onClick={() => setUserToEditName(p)}
+                                  title="Edit Display Name"
+                                  aria-label={`Edit display name for ${p.full_name || "user"}`}
+                                  className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors opacity-70 hover:opacity-100"
+                                >
+                                  <Edit2 className="h-3 w-3" />
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Role */}
+                          <td className="py-3 px-4">
+                            {p.role === "super_user" ? (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-800 border border-blue-200">
+                                <ShieldCheck className="h-3 w-3 text-blue-700" />
+                                Super User
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 border border-slate-200">
+                                <Shield className="h-3 w-3 text-slate-500" />
+                                Normal User
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Status */}
+                          <td className="py-3 px-4">
+                            {p.is_active ? (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800 border border-emerald-200">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                                Active
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-800 border border-rose-200">
+                                <span className="h-1.5 w-1.5 rounded-full bg-rose-600" />
+                                Deactivated
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Created At */}
+                          <td className="py-3 px-4 text-muted-foreground whitespace-nowrap">
+                            {formatDateTime(p.created_at)}
+                          </td>
+
+                          {/* Actions */}
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {/* Role Toggle Button */}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setUserToChangeRole(p)}
+                                disabled={isSelf}
+                                title={
+                                  isSelf
+                                    ? "Cannot change your own role"
+                                    : `Change role to ${
+                                        p.role === "super_user"
+                                          ? "Normal User"
+                                          : "Super User"
+                                      }`
+                                }
+                                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                              >
+                                <Shield className="h-3.5 w-3.5 mr-1" />
+                                {p.role === "super_user" ? "Demote" : "Promote"}
+                              </Button>
+
+                              {/* Active/Deactivate Button */}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setUserToToggleStatus(p)}
+                                disabled={isSelf}
+                                title={
+                                  isSelf
+                                    ? "Cannot deactivate your own account"
+                                    : p.is_active
+                                      ? "Deactivate account"
+                                      : "Activate account"
+                                }
+                                className={`h-7 px-2 text-xs ${
+                                  p.is_active
+                                    ? "text-rose-700 hover:text-rose-900 hover:bg-rose-50"
+                                    : "text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50"
+                                }`}
+                              >
+                                {p.is_active ? (
+                                  <>
+                                    <UserX className="h-3.5 w-3.5 mr-1" />
+                                    Deactivate
+                                  </>
+                                ) : (
+                                  <>
+                                    <UserCheck className="h-3.5 w-3.5 mr-1" />
+                                    Activate
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
