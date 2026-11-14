@@ -32,6 +32,7 @@ import {
   useDashboardData,
   type DashboardMovement,
 } from "@/app/lib/useDashboardData";
+import { cn } from "@/lib/utils";
 
 const STATUS_BADGE = {
   out_of_stock: {
@@ -65,7 +66,7 @@ export default function DashboardPage() {
   // Current date for header
   const currentDateFormatted = useMemo(() => {
     return new Intl.DateTimeFormat("en-IN", {
-      weekday: "long",
+      weekday: "short",
       day: "numeric",
       month: "short",
       year: "numeric",
@@ -73,18 +74,18 @@ export default function DashboardPage() {
   }, []);
 
   return (
-    <div className="space-y-6 min-w-0">
+    <div className="space-y-4 sm:space-y-6 min-w-0">
       {/* =========================================================================
-          A. Dashboard Header
+          A. Dashboard Header (Mobile First 2-Tier Layout)
           ========================================================================= */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+      <div className="flex flex-col gap-2.5 pb-2.5 border-b">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground truncate">
               Dashboard
             </h1>
             <span
-              className={`rounded-full px-2 py-0.5 text-[11px] font-semibold border ${
+              className={`rounded-full px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold border shrink-0 ${
                 isSuperUser
                   ? "bg-brand-blue/10 text-brand-blue border-brand-blue/20"
                   : "bg-slate-100 text-slate-700 border-slate-200"
@@ -93,31 +94,38 @@ export default function DashboardPage() {
               {isSuperUser ? "Super User" : "Staff User"}
             </span>
           </div>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            {profile?.full_name ? `Welcome back, ${profile.full_name}. ` : ""}
-            Operational inventory overview, stock health, and recent ledger activity.
-          </p>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground font-medium bg-card px-2.5 py-1.5 rounded-lg border shadow-2xs">
+              <Calendar className="h-3.5 w-3.5 text-brand-blue" />
+              <span>{currentDateFormatted}</span>
+            </div>
+
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8.5 sm:h-8 text-xs gap-1.5 px-2.5 active:scale-95 transition-transform"
+              onClick={() => void refetch()}
+              disabled={loading || refreshing}
+              title="Refresh dashboard data"
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${refreshing ? "animate-spin text-brand-blue" : ""}`}
+              />
+              <span className="hidden sm:inline">Refresh</span>
+            </Button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2.5 self-start sm:self-auto">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium bg-card px-2.5 py-1.5 rounded-lg border shadow-2xs">
-            <Calendar className="h-3.5 w-3.5 text-brand-blue" />
+        <div className="flex flex-wrap items-center justify-between gap-1 text-xs text-muted-foreground">
+          <p className="truncate max-w-full">
+            {profile?.full_name ? `Welcome back, ${profile.full_name}. ` : ""}
+            Operational stock overview & ledger health.
+          </p>
+          <div className="sm:hidden flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+            <Calendar className="h-3 w-3 text-brand-blue" />
             <span>{currentDateFormatted}</span>
           </div>
-
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8 text-xs gap-1"
-            onClick={() => void refetch()}
-            disabled={loading || refreshing}
-            title="Refresh dashboard data"
-          >
-            <RefreshCw
-              className={`h-3.5 w-3.5 ${refreshing ? "animate-spin text-brand-blue" : ""}`}
-            />
-            <span className="hidden sm:inline">Refresh</span>
-          </Button>
         </div>
       </div>
 
@@ -127,15 +135,15 @@ export default function DashboardPage() {
           role="alert"
           className="rounded-lg bg-destructive/10 border border-destructive/20 p-3.5 text-xs sm:text-sm text-destructive flex items-center justify-between gap-2"
         >
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>{error}</span>
+            <span className="truncate">{error}</span>
           </div>
           <Button
             size="sm"
             variant="outline"
             onClick={() => void refetch()}
-            className="h-7 text-xs"
+            className="h-7 text-xs shrink-0"
           >
             Retry
           </Button>
@@ -146,13 +154,13 @@ export default function DashboardPage() {
           B. Inventory Overview — 4 Primary Metric Cards
           Mobile: 2-column grid. Desktop: 4-column row.
           ========================================================================= */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
         {/* 1. Active Products */}
         <MetricCard
           label="Active Products"
           value={loading ? undefined : activeProductsCount}
-          subtext="Registered catalog items"
-          icon={<Package className="h-5 w-5 text-brand-blue" />}
+          subtext="Catalog items"
+          icon={<Package className="h-4 sm:h-5 w-4 sm:w-5 text-brand-blue" />}
           badgeClass="bg-blue-50 dark:bg-blue-950/40"
           onClick={() => navigate("/app/inventory")}
         />
@@ -163,12 +171,14 @@ export default function DashboardPage() {
           value={loading ? undefined : lowStockCount}
           subtext={
             lowStockCount === 0
-              ? "All items above threshold"
-              : "Below safety threshold"
+              ? "All above threshold"
+              : "Below safety level"
           }
-          icon={<AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-500" />}
+          icon={<AlertTriangle className="h-4 sm:h-5 w-4 sm:w-5 text-amber-600 dark:text-amber-500" />}
           badgeClass="bg-amber-50 dark:bg-amber-950/40"
           highlight={lowStockCount > 0}
+          highlightBorder={lowStockCount > 0}
+          borderColor="border-amber-300 dark:border-amber-700"
           highlightColor="text-amber-700 dark:text-amber-400"
           onClick={() => navigate("/app/inventory?status=low")}
         />
@@ -179,38 +189,40 @@ export default function DashboardPage() {
           value={loading ? undefined : outOfStockCount}
           subtext={
             outOfStockCount === 0
-              ? "No depleted inventory"
-              : "Zero quantity remaining"
+              ? "No depleted items"
+              : "Zero quantity left"
           }
-          icon={<AlertCircle className="h-5 w-5 text-rose-600 dark:text-rose-500" />}
+          icon={<AlertCircle className="h-4 sm:h-5 w-4 sm:w-5 text-rose-600 dark:text-rose-500" />}
           badgeClass="bg-rose-50 dark:bg-rose-950/40"
           highlight={outOfStockCount > 0}
+          highlightBorder={outOfStockCount > 0}
+          borderColor="border-rose-300 dark:border-rose-700"
           highlightColor="text-rose-700 dark:text-rose-400"
           onClick={() => navigate("/app/inventory?status=out_of_stock")}
         />
 
         {/* 4. Today's Movements */}
         <MetricCard
-          label="Today's Movements"
+          label="Today's Activity"
           value={loading ? undefined : todayMovementsCount}
           subtext={
             isSuperUser
               ? "Ledger events today"
-              : "Your transactions today"
+              : "Your events today"
           }
-          icon={<Activity className="h-5 w-5 text-emerald-600 dark:text-emerald-500" />}
+          icon={<Activity className="h-4 sm:h-5 w-4 sm:w-5 text-emerald-600 dark:text-emerald-500" />}
           badgeClass="bg-emerald-50 dark:bg-emerald-950/40"
           onClick={() => navigate("/app/movements")}
         />
       </div>
 
       {/* =========================================================================
-          E. Quick Actions
-          Accessible, prominent shortcuts to primary stock flows
+          C. Quick Actions
+          Accessible, prominent shortcuts with 44px mobile touch targets
           ========================================================================= */}
-      <Card className="shadow-2xs border">
-        <CardContent className="p-3.5 sm:p-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <Card className="shadow-2xs border bg-card">
+        <CardContent className="p-3 sm:p-4">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
             <div>
               <h2 className="text-xs sm:text-sm font-bold text-foreground">
                 Quick Actions
@@ -220,24 +232,24 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-2.5">
               {/* Add Stock */}
               <Button
                 size="sm"
-                className="h-9 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium gap-1.5 shadow-2xs"
+                className="h-11 sm:h-9 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-1.5 shadow-2xs active:scale-[0.98] transition-transform"
                 onClick={() => navigate("/app/movements?action=add")}
               >
-                <PlusCircle className="h-4 w-4" />
+                <PlusCircle className="h-4 w-4 shrink-0" />
                 <span>Add Stock</span>
               </Button>
 
               {/* Remove Stock */}
               <Button
                 size="sm"
-                className="h-9 text-xs bg-brand-blue hover:bg-blue-700 text-white font-medium gap-1.5 shadow-2xs"
+                className="h-11 sm:h-9 text-xs bg-brand-blue hover:bg-blue-700 text-white font-semibold gap-1.5 shadow-2xs active:scale-[0.98] transition-transform"
                 onClick={() => navigate("/app/movements?action=remove")}
               >
-                <MinusCircle className="h-4 w-4" />
+                <MinusCircle className="h-4 w-4 shrink-0" />
                 <span>Remove Stock</span>
               </Button>
 
@@ -245,10 +257,10 @@ export default function DashboardPage() {
               <Button
                 size="sm"
                 variant="outline"
-                className="h-9 text-xs font-medium gap-1.5"
+                className="h-11 sm:h-9 text-xs font-medium gap-1.5 active:scale-[0.98] transition-transform"
                 onClick={() => navigate("/app/inventory")}
               >
-                <Boxes className="h-4 w-4 text-brand-blue" />
+                <Boxes className="h-4 w-4 text-brand-blue shrink-0" />
                 <span>Inventory</span>
               </Button>
 
@@ -256,10 +268,10 @@ export default function DashboardPage() {
               <Button
                 size="sm"
                 variant="outline"
-                className="h-9 text-xs font-medium gap-1.5"
+                className="h-11 sm:h-9 text-xs font-medium gap-1.5 active:scale-[0.98] transition-transform"
                 onClick={() => navigate("/app/movements")}
               >
-                <History className="h-4 w-4 text-muted-foreground" />
+                <History className="h-4 w-4 text-muted-foreground shrink-0" />
                 <span>Movements</span>
               </Button>
             </div>
@@ -269,49 +281,52 @@ export default function DashboardPage() {
 
       {/* =========================================================================
           2-Column Section (Desktop: 2 columns; Mobile: stacked)
-          - Left Column: Stock Requiring Attention (Section 3D)
-          - Right Column: Recent Stock Activity (Section 3C)
+          - Left Column: Stock Requiring Attention
+          - Right Column: Recent Stock Activity
+          Natural content height (items-start)
           ========================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-start">
         {/* =======================================================================
             D. Stock Requiring Attention
             ======================================================================= */}
         <Card className="shadow-2xs border">
-          <CardHeader className="pb-3 border-b">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CardTitle className="text-sm sm:text-base font-bold flex items-center gap-1.5">
+          <CardHeader className="p-3 sm:p-4 pb-2.5 sm:pb-3 border-b">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <CardTitle className="text-sm sm:text-base font-bold flex items-center gap-1.5 truncate">
                   <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-                  Stock Requiring Attention
+                  <span>Stock Requiring Attention</span>
                 </CardTitle>
-                <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-muted text-muted-foreground border">
+                <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-muted text-muted-foreground border shrink-0">
                   {attentionProducts.length}
                 </span>
               </div>
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-7 text-xs text-brand-blue hover:text-blue-700 hover:bg-blue-50 px-2"
+                className="h-7 text-xs text-brand-blue hover:text-blue-700 hover:bg-blue-50 px-2 shrink-0"
                 onClick={() => navigate("/app/inventory?status=low")}
               >
                 <span>View All</span>
                 <ArrowRight className="h-3 w-3 ml-1" />
               </Button>
             </div>
-            <CardDescription className="text-xs">
+            <CardDescription className="text-[11px] sm:text-xs">
               Depleted inventory or items below defined low-stock thresholds.
             </CardDescription>
           </CardHeader>
 
           <CardContent className="p-0 divide-y">
             {loading ? (
-              <div className="p-6 text-center text-xs text-muted-foreground space-y-2">
+              <div className="py-8 px-4 text-center text-xs text-muted-foreground space-y-2">
                 <RefreshCw className="h-5 w-5 animate-spin mx-auto text-brand-blue" />
                 <p>Checking inventory thresholds…</p>
               </div>
             ) : attentionProducts.length === 0 ? (
-              <div className="p-8 text-center space-y-2">
-                <CheckCircle2 className="h-8 w-8 text-emerald-600 mx-auto" />
+              <div className="py-6 sm:py-8 px-4 text-center space-y-2">
+                <div className="inline-flex p-2.5 rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 border border-emerald-200/50">
+                  <CheckCircle2 className="h-6 w-6" />
+                </div>
                 <p className="text-sm font-semibold text-foreground">
                   All Inventory Healthy
                 </p>
@@ -326,22 +341,22 @@ export default function DashboardPage() {
                   <div
                     key={p.productId}
                     onClick={() => navigate(`/app/inventory?search=${encodeURIComponent(p.code)}`)}
-                    className="p-3 sm:p-3.5 flex items-center justify-between gap-3 hover:bg-muted/40 transition-colors cursor-pointer"
+                    className="p-3 sm:p-3.5 flex items-center justify-between gap-3 hover:bg-muted/40 active:bg-muted/60 transition-colors cursor-pointer"
                   >
                     <div className="min-w-0 space-y-0.5">
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span className="font-mono text-xs font-bold text-brand-blue">
                           {p.code}
                         </span>
-                        <span className="text-xs font-semibold text-foreground truncate max-w-[180px] sm:max-w-xs">
+                        <span className="text-xs font-semibold text-foreground truncate max-w-[150px] xs:max-w-[200px] sm:max-w-xs">
                           {p.name}
                         </span>
                       </div>
                       <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                        <span>{p.categoryName ?? "General"}</span>
+                        <span className="truncate">{p.categoryName ?? "General"}</span>
                         {p.lowStockThreshold != null && p.lowStockThreshold > 0 && (
-                          <span>
-                            · Alert at:{" "}
+                          <span className="shrink-0">
+                            · Alert:{" "}
                             <span className="font-mono">{p.lowStockThreshold} {p.baseUomCode}</span>
                           </span>
                         )}
@@ -369,31 +384,31 @@ export default function DashboardPage() {
         </Card>
 
         {/* =======================================================================
-            C. Recent Stock Activity
+            E. Recent Stock Activity
             ======================================================================= */}
         <Card className="shadow-2xs border">
-          <CardHeader className="pb-3 border-b">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CardTitle className="text-sm sm:text-base font-bold flex items-center gap-1.5">
+          <CardHeader className="p-3 sm:p-4 pb-2.5 sm:pb-3 border-b">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <CardTitle className="text-sm sm:text-base font-bold flex items-center gap-1.5 truncate">
                   <History className="h-4 w-4 text-brand-blue shrink-0" />
-                  Recent Stock Activity
+                  <span>Recent Stock Activity</span>
                 </CardTitle>
-                <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-muted text-muted-foreground border">
+                <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-muted text-muted-foreground border shrink-0">
                   Latest
                 </span>
               </div>
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-7 text-xs text-brand-blue hover:text-blue-700 hover:bg-blue-50 px-2"
+                className="h-7 text-xs text-brand-blue hover:text-blue-700 hover:bg-blue-50 px-2 shrink-0"
                 onClick={() => navigate("/app/movements")}
               >
                 <span>View All</span>
                 <ArrowRight className="h-3 w-3 ml-1" />
               </Button>
             </div>
-            <CardDescription className="text-xs">
+            <CardDescription className="text-[11px] sm:text-xs">
               {isSuperUser
                 ? "Authoritative movements recorded across all users."
                 : "Your recently recorded stock movements."}
@@ -402,13 +417,15 @@ export default function DashboardPage() {
 
           <CardContent className="p-0 divide-y">
             {loading ? (
-              <div className="p-6 text-center text-xs text-muted-foreground space-y-2">
+              <div className="py-8 px-4 text-center text-xs text-muted-foreground space-y-2">
                 <RefreshCw className="h-5 w-5 animate-spin mx-auto text-brand-blue" />
                 <p>Loading recent ledger transactions…</p>
               </div>
             ) : recentMovements.length === 0 ? (
-              <div className="p-8 text-center space-y-2">
-                <History className="h-8 w-8 text-muted-foreground/60 mx-auto" />
+              <div className="py-6 sm:py-8 px-4 text-center space-y-2">
+                <div className="inline-flex p-2.5 rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 border border-slate-200/60">
+                  <History className="h-6 w-6" />
+                </div>
                 <p className="text-sm font-semibold text-foreground">
                   No Recent Activity
                 </p>
@@ -418,7 +435,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               recentMovements.map((m) => (
-                <MovementActivityRow key={m.id} movement={m} />
+                <MovementActivityRow key={m.id} movement={m} onNavigate={() => navigate("/app/movements")} />
               ))
             )}
           </CardContent>
@@ -438,6 +455,8 @@ function MetricCard({
   icon,
   badgeClass,
   highlight = false,
+  highlightBorder = false,
+  borderColor = "border-border",
   highlightColor,
   onClick,
 }: {
@@ -447,27 +466,32 @@ function MetricCard({
   icon: React.ReactNode;
   badgeClass: string;
   highlight?: boolean;
+  highlightBorder?: boolean;
+  borderColor?: string;
   highlightColor?: string;
   onClick: () => void;
 }) {
   return (
     <Card
       onClick={onClick}
-      className="p-3.5 sm:p-4 rounded-xl border bg-card hover:border-brand-blue/40 transition-all cursor-pointer shadow-2xs group flex flex-col justify-between"
+      className={cn(
+        "p-3 sm:p-4 rounded-xl border bg-card hover:border-brand-blue/50 hover:shadow-xs transition-all cursor-pointer shadow-2xs group flex flex-col justify-between active:scale-[0.98]",
+        highlightBorder ? borderColor : "border-border"
+      )}
     >
       <div>
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        <div className="flex items-center justify-between gap-1.5">
+          <span className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">
             {label}
           </span>
-          <div className={`p-2 rounded-lg ${badgeClass} shrink-0`}>
+          <div className={`p-1.5 sm:p-2 rounded-lg ${badgeClass} shrink-0`}>
             {icon}
           </div>
         </div>
 
-        <div className="mt-2 flex items-baseline gap-1">
+        <div className="mt-1 sm:mt-2 flex items-baseline gap-1">
           <span
-            className={`text-2xl sm:text-3xl font-extrabold font-mono tabular-nums leading-none ${
+            className={`text-2xl sm:text-3xl font-extrabold font-mono tabular-nums leading-tight ${
               highlight && highlightColor ? highlightColor : "text-foreground"
             }`}
           >
@@ -476,9 +500,9 @@ function MetricCard({
         </div>
       </div>
 
-      <div className="mt-2.5 pt-2 border-t flex items-center justify-between text-[11px] text-muted-foreground">
+      <div className="mt-2 pt-2 border-t flex items-center justify-between text-[10px] sm:text-[11px] text-muted-foreground">
         <span className="truncate">{subtext}</span>
-        <ArrowUpRight className="h-3 w-3 shrink-0 text-muted-foreground group-hover:text-brand-blue transition-colors" />
+        <ArrowUpRight className="h-3 w-3 shrink-0 text-muted-foreground/60 group-hover:text-brand-blue transition-colors ml-1" />
       </div>
     </Card>
   );
@@ -489,8 +513,10 @@ function MetricCard({
 // =============================================================================
 function MovementActivityRow({
   movement,
+  onNavigate,
 }: {
   movement: DashboardMovement;
+  onNavigate: () => void;
 }) {
   const isPositive = movement.qtyDelta > 0;
   const isCorrection = movement.movementType === "correction";
@@ -530,13 +556,16 @@ function MovementActivityRow({
   }
 
   return (
-    <div className="p-3 sm:p-3.5 flex items-start justify-between gap-3 hover:bg-muted/40 transition-colors">
+    <div
+      onClick={onNavigate}
+      className="p-3 sm:p-3.5 flex items-start justify-between gap-3 hover:bg-muted/40 active:bg-muted/60 transition-colors cursor-pointer"
+    >
       <div className="min-w-0 space-y-1">
         <div className="flex flex-wrap items-center gap-1.5">
           <span
             className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border ${badgeClass}`}
           >
-            <TypeIcon className="h-3 w-3" />
+            <TypeIcon className="h-3 w-3 shrink-0" />
             <span>{badgeLabel}</span>
           </span>
 
@@ -551,7 +580,7 @@ function MovementActivityRow({
           )}
         </div>
 
-        <div className="text-xs text-foreground font-medium truncate max-w-[200px] sm:max-w-xs">
+        <div className="text-xs text-foreground font-medium truncate max-w-[190px] sm:max-w-xs">
           {movement.product?.name ?? "Product"}
         </div>
 
@@ -560,13 +589,15 @@ function MovementActivityRow({
           {movement.creator?.full_name && (
             <>
               <span>·</span>
-              <span>by {movement.creator.full_name}</span>
+              <span className="truncate max-w-[100px] sm:max-w-none">
+                by {movement.creator.full_name}
+              </span>
             </>
           )}
           {movement.reference && (
             <>
               <span>·</span>
-              <span className="italic truncate max-w-[120px] sm:max-w-[180px]">
+              <span className="italic truncate max-w-[100px] sm:max-w-[160px]">
                 Ref: {movement.reference}
               </span>
             </>
