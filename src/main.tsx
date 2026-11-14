@@ -9,6 +9,22 @@ createRoot(document.getElementById("root")!).render(
   </StrictMode>,
 );
 
+// Prevent accidental number modifications when scrolling over number inputs across the entire app
+if (typeof window !== "undefined") {
+  window.addEventListener(
+    "wheel",
+    () => {
+      if (
+        document.activeElement instanceof HTMLInputElement &&
+        document.activeElement.type === "number"
+      ) {
+        document.activeElement.blur();
+      }
+    },
+    { passive: true },
+  );
+}
+
 // Register PWA Service Worker for app shell caching
 if (typeof window !== "undefined" && "serviceWorker" in navigator && window.location.protocol.startsWith("http")) {
   window.addEventListener("load", () => {

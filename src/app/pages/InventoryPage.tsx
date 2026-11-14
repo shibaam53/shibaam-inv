@@ -156,10 +156,13 @@ export default function InventoryPage() {
     typeof window !== "undefined" && window.innerWidth >= 768 ? 25 : 10,
   );
 
-  // Reset to page 1 on search or filter change
-  useEffect(() => {
+  // Reset to page 1 on search or filter change during render (avoids cascading effect renders)
+  const filterKey = `${query}|${statusFilter}`;
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+  if (prevFilterKey !== filterKey) {
+    setPrevFilterKey(filterKey);
     setCurrentPage(1);
-  }, [query, statusFilter]);
+  }
 
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);

@@ -10,7 +10,8 @@ import {
   X,
   Eye,
   Sliders,
-  Package,
+  PackageOpen,
+  SearchX,
   Scale,
   CheckCircle2,
 } from "lucide-react";
@@ -24,6 +25,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PaginationBar } from "@/app/components/PaginationBar";
 import { supabase } from "@/app/lib/supabase";
 import {
   formatQty,
@@ -33,6 +35,7 @@ import {
   formatPaano,
 } from "@/app/lib/format";
 import { useFormErrorVisibility } from "@/app/lib/useFormErrorVisibility";
+import { cn } from "@/lib/utils";
 import type { Database } from "@/types/database";
 
 type Category = Database["public"]["Tables"]["categories"]["Row"];
@@ -182,6 +185,28 @@ export default function ProductsPage() {
     });
   }, [products, searchQuery, categoryFilter, statusFilter, perforatedOnly]);
 
+  // Pagination state: default 25 on desktop, 10 on mobile
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(() =>
+    typeof window !== "undefined" && window.innerWidth >= 768 ? 25 : 10,
+  );
+
+  // Reset to page 1 on filter changes during render (avoids cascading effect renders)
+  const filterKey = `${searchQuery}|${categoryFilter}|${statusFilter}|${perforatedOnly}`;
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+  if (prevFilterKey !== filterKey) {
+    setPrevFilterKey(filterKey);
+    setCurrentPage(1);
+  }
+
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+
+  const paginatedProducts = useMemo(() => {
+    const start = (safeCurrentPage - 1) * pageSize;
+    return filteredProducts.slice(start, start + pageSize);
+  }, [filteredProducts, safeCurrentPage, pageSize]);
+
   const handleToggleArchive = async (product: ProductWithDetails) => {
     const nextStatus = product.status === "active" ? "archived" : "active";
     const confirmMsg =
@@ -210,7 +235,7 @@ export default function ProductsPage() {
   return (
     <div className="grid gap-6 min-w-0 w-full">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
             Product Administration
@@ -220,8 +245,11 @@ export default function ProductsPage() {
             perforated-sheet specs.
           </p>
         </div>
-        <Button onClick={() => setShowCreateModal(true)} className="w-full sm:w-auto">
-          <Plus className="h-4 w-4 mr-1" /> New Product
+        <Button
+          onClick={() => setShowCreateModal(true)}
+          className="w-full sm:w-auto h-11 sm:h-9 text-xs sm:text-sm font-semibold bg-brand-blue hover:bg-brand-blue/90 shadow-2xs"
+        >
+          <Plus className="h-4 w-4 mr-1.5" /> New Product
         </Button>
       </div>
 
@@ -248,22 +276,32 @@ export default function ProductsPage() {
 
       {/* Filter Toolbar */}
       <Card className="min-w-0">
-        <CardContent className="pt-6">
-          <div className="grid gap-4 md:grid-cols-4">
+        <CardContent className="p-3.5 sm:p-6">
+          <div className="grid gap-3 sm:gap-4 md:grid-cols-4">
             <div className="md:col-span-2 relative">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-3.5 sm:top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
               <Input
                 placeholder="Search by code, name, description..."
-                className="pl-9"
+                className="pl-9 h-11 sm:h-9 text-xs sm:text-sm"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-3.5 sm:top-2.5 text-muted-foreground hover:text-foreground p-0.5"
+                  aria-label="Clear search"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
             </div>
 
             <div>
               <select
                 aria-label="Filter by category"
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="flex h-11 sm:h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs sm:text-sm shadow-2xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue font-medium"
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
               >
@@ -279,7 +317,7 @@ export default function ProductsPage() {
             <div className="flex gap-2">
               <select
                 aria-label="Filter by product status"
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="flex h-11 sm:h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs sm:text-sm shadow-2xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue font-medium"
                 value={statusFilter}
                 onChange={(e) =>
                   setStatusFilter(
@@ -297,7 +335,12 @@ export default function ProductsPage() {
                 size="sm"
                 onClick={() => setPerforatedOnly((prev) => !prev)}
                 title="Filter perforated sheet products only"
-                className="whitespace-nowrap shrink-0"
+                className={cn(
+                  "h-11 sm:h-9 px-3 text-xs whitespace-nowrap shrink-0 font-medium",
+                  perforatedOnly
+                    ? "bg-brand-blue text-white"
+                    : "text-foreground border-input hover:bg-muted",
+                )}
               >
                 <Sliders className="h-3.5 w-3.5 mr-1" /> Perf. Sheets
               </Button>
@@ -307,14 +350,14 @@ export default function ProductsPage() {
       </Card>
 
       {/* Product List */}
-      <Card className="min-w-0 overflow-hidden">
-        <CardHeader className="px-4 sm:px-6">
+      <Card id="products-top" className="min-w-0 overflow-hidden">
+        <CardHeader className="p-3.5 sm:p-6 pb-3 border-b">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-lg sm:text-xl">
+              <CardTitle className="text-base sm:text-lg">
                 Products ({filteredProducts.length})
               </CardTitle>
-              <CardDescription className="text-xs sm:text-sm">
+              <CardDescription className="text-xs">
                 Master product records and technical specifications.
               </CardDescription>
             </div>
@@ -323,12 +366,13 @@ export default function ProductsPage() {
               size="sm"
               onClick={() => void loadAll()}
               disabled={loading}
+              className="h-8 text-xs font-medium"
             >
               Refresh
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="p-0 sm:p-6 sm:pt-0">
+        <CardContent className="p-0">
           {error && (
             <div className="m-4 flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
               <AlertCircle className="h-4 w-4 shrink-0" />
@@ -337,169 +381,286 @@ export default function ProductsPage() {
           )}
 
           {loading ? (
-            <p className="text-sm text-muted-foreground py-6 text-center">
+            <p className="text-sm text-muted-foreground py-10 text-center">
               Loading product catalogue…
             </p>
           ) : filteredProducts.length === 0 ? (
-            <div className="m-4 rounded-lg border border-dashed p-8 text-center">
-              <Package className="h-10 w-10 text-muted-foreground mx-auto mb-2 opacity-60" />
-              <p className="text-sm font-medium">No products found</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {products.length === 0
-                  ? "Get started by creating your first product."
-                  : "Try clearing or adjusting your search filters."}
-              </p>
-              {products.length === 0 && (
-                <Button
-                  size="sm"
-                  className="mt-4"
-                  onClick={() => setShowCreateModal(true)}
-                >
-                  <Plus className="h-4 w-4 mr-1" /> Add Product
-                </Button>
+            <div className="rounded-xl border border-dashed p-8 sm:p-10 text-center space-y-3 bg-surface/30 m-3.5 sm:m-6">
+              {products.length === 0 ? (
+                // 1. No products in catalog yet
+                <div className="space-y-3 max-w-sm mx-auto">
+                  <div className="inline-flex p-3 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 border">
+                    <PackageOpen className="h-6 w-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-bold text-foreground">
+                      Product Catalogue Empty
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      No products have been registered yet. Create your first product to get started.
+                    </p>
+                  </div>
+                  <div className="pt-1">
+                    <Button
+                      size="sm"
+                      className="h-9 text-xs bg-brand-blue hover:bg-brand-blue/90"
+                      onClick={() => setShowCreateModal(true)}
+                    >
+                      <Plus className="h-4 w-4 mr-1.5" />
+                      Create First Product
+                    </Button>
+                  </div>
+                </div>
+              ) : searchQuery.trim() && (categoryFilter !== "all" || statusFilter !== "active" || perforatedOnly) ? (
+                // 2. Both search and filter active
+                <div className="space-y-3 max-w-sm mx-auto">
+                  <div className="inline-flex p-3 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-600 border border-amber-200">
+                    <SearchX className="h-6 w-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-bold text-foreground">
+                      No Matching Products
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      No products matched &quot;{searchQuery}&quot; under the active filters.
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-center gap-2 pt-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs"
+                      onClick={() => setSearchQuery("")}
+                    >
+                      Clear Search
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs text-brand-blue border-brand-blue/30"
+                      onClick={() => {
+                        setSearchQuery("");
+                        setCategoryFilter("all");
+                        setStatusFilter("all");
+                        setPerforatedOnly(false);
+                      }}
+                    >
+                      Reset All Filters
+                    </Button>
+                  </div>
+                </div>
+              ) : searchQuery.trim() ? (
+                // 3. Search query active
+                <div className="space-y-3 max-w-sm mx-auto">
+                  <div className="inline-flex p-3 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 border">
+                    <SearchX className="h-6 w-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-bold text-foreground">
+                      No Products Found
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      No products matched &quot;{searchQuery}&quot;. Try checking code, name, or gauge.
+                    </p>
+                  </div>
+                  <div className="pt-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs"
+                      onClick={() => setSearchQuery("")}
+                    >
+                      Clear Search
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                // 4. Filters active with 0 results
+                <div className="space-y-3 max-w-sm mx-auto">
+                  <div className="inline-flex p-3 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 border">
+                    <PackageOpen className="h-6 w-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-bold text-foreground">
+                      No Filtered Products
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      There are no products matching the current category or status selection.
+                    </p>
+                  </div>
+                  <div className="pt-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs text-brand-blue border-brand-blue/30"
+                      onClick={() => {
+                        setCategoryFilter("all");
+                        setStatusFilter("active");
+                        setPerforatedOnly(false);
+                      }}
+                    >
+                      Reset Filters ({products.length} Total)
+                    </Button>
+                  </div>
+                </div>
               )}
             </div>
           ) : (
             <>
               {/* Mobile Card View (phones / small screens) */}
               <div className="divide-y md:hidden">
-                {filteredProducts.map((p) => {
+                {paginatedProducts.map((p) => {
                   const hasMovements = (p.stock_movements?.length ?? 0) > 0;
                   const stockQty = getProductStockBalance(p);
 
                   return (
-                    <div key={p.id} className="p-4 space-y-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="font-mono text-xs font-bold text-brand-blue">
-                              {p.code}
+                    <div key={p.id} className="p-3.5 space-y-2.5">
+                      {/* Top Header: Code, Gauge, Tracking, Status */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                          <span className="font-mono text-xs font-bold text-brand-blue px-2 py-0.5 rounded bg-brand-blue/10 shrink-0">
+                            {p.code}
+                          </span>
+                          {p.gauge && (
+                            <span className="inline-flex items-center rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold text-foreground border border-border">
+                              Gauge {p.gauge}
                             </span>
-                            {p.gauge && (
-                              <span className="inline-flex items-center rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold text-foreground border border-border">
-                                Gauge {p.gauge}
-                              </span>
+                          )}
+                          <span
+                            className={cn(
+                              "rounded-full px-2 py-0.5 text-[10px] font-semibold border",
+                              p.tracking_mode === "roll"
+                                ? "bg-purple-100 text-purple-900 border-purple-200"
+                                : "bg-slate-100 text-slate-700 border-slate-200",
                             )}
-                            <span
-                              className={`rounded-full px-1.5 py-0.2 text-[10px] font-medium ${
-                                p.tracking_mode === "roll"
-                                  ? "bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-300"
-                                  : "bg-blue-100 text-blue-900 dark:bg-blue-900/30 dark:text-blue-300"
-                              }`}
-                            >
-                              {p.tracking_mode === "roll"
-                                ? "Roll Tracked"
-                                : "Aggregate"}
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            className="font-medium text-sm text-left hover:underline text-foreground mt-1 block truncate max-w-[240px]"
-                            onClick={() => setViewingProduct(p)}
                           >
-                            {p.name}
-                          </button>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {p.category?.name ?? "—"}
-                          </p>
+                            {p.tracking_mode === "roll"
+                              ? "Roll Tracked"
+                              : "Aggregate"}
+                          </span>
                         </div>
 
                         <span
-                          className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium shrink-0 ${
+                          className={cn(
+                            "inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold border shrink-0",
                             p.status === "active"
-                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
-                              : "bg-muted text-muted-foreground"
-                          }`}
+                              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                              : "bg-muted text-muted-foreground border-border",
+                          )}
                         >
                           {p.status === "active" ? "Active" : "Archived"}
                         </span>
                       </div>
 
-                      {/* Specs & Stock in clean 2-column mobile card */}
-                      <div className="grid grid-cols-2 gap-2 text-xs bg-muted/30 rounded p-2.5">
+                      {/* Product Name & Category */}
+                      <div>
+                        <button
+                          type="button"
+                          className="font-bold text-sm text-left hover:underline text-foreground leading-snug block"
+                          onClick={() => setViewingProduct(p)}
+                        >
+                          {p.name}
+                        </button>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {p.category?.name ?? "General"}
+                        </p>
+                      </div>
+
+                      {/* 2-Column Specs Strip */}
+                      <div className="grid grid-cols-2 gap-2 text-xs bg-surface/60 rounded-lg border border-border/50 p-2.5">
                         <div>
-                          <span className="text-muted-foreground text-[10px] uppercase font-semibold">
+                          <span className="text-muted-foreground text-[10px] uppercase font-bold block">
                             Stock Balance
                           </span>
-                          <div className="font-mono font-bold text-brand-blue text-sm mt-0.5">
-                            {formatQty(stockQty)} {p.base_uom?.code}
-                          </div>
+                          <span className="font-mono font-extrabold text-sm text-foreground block mt-0.5">
+                            {formatQty(stockQty)}{" "}
+                            <span className="text-xs font-normal text-muted-foreground">
+                              {p.base_uom?.code}
+                            </span>
+                          </span>
                           {p.base_uom?.code?.toLowerCase() === "sqft" && p.paano_in_feet != null && (
-                            <div className="text-[11px] font-mono text-muted-foreground">
+                            <span className="text-[10px] font-mono text-brand-blue block mt-0.5 truncate">
                               {formatPhysicalSize(stockQty, p.paano_in_feet) ?? "—"}
-                            </div>
+                            </span>
                           )}
                         </div>
+
                         <div>
-                          <span className="text-muted-foreground text-[10px] uppercase font-semibold">
+                          <span className="text-muted-foreground text-[10px] uppercase font-bold block">
                             Base Unit
                           </span>
-                          <div className="text-foreground font-medium text-xs mt-0.5">
+                          <span className="text-foreground font-medium text-xs block mt-0.5 truncate">
                             {p.base_uom?.name} ({p.base_uom?.code})
-                          </div>
+                          </span>
                           {p.paano_value != null && p.paano_unit && (
-                            <div className="text-[11px] text-muted-foreground mt-0.5">
-                              Paano: {p.paano_value} {p.paano_unit}
-                            </div>
+                            <span className="text-[10px] text-muted-foreground block mt-0.5 truncate">
+                              Height (Paano): {formatPaano(p.paano_value, p.paano_unit, p.paano_in_feet)}
+                            </span>
                           )}
                         </div>
+
                         {p.perforation && (
-                          <div className="col-span-2 text-[11px] text-muted-foreground border-t pt-1.5 mt-0.5">
-                            <span className="text-primary font-medium">
+                          <div className="col-span-2 text-[11px] text-muted-foreground border-t border-border/50 pt-1.5 mt-0.5 flex items-center justify-between">
+                            <span className="font-medium text-brand-blue">
                               Ø{p.perforation.hole_diameter_mm}mm
-                              {p.perforation.pitch_mm != null
-                                ? ` · Pitch ${p.perforation.pitch_mm}mm`
-                                : ""}
+                              {p.perforation.pitch_mm != null ? ` · Pitch ${p.perforation.pitch_mm}mm` : ""}
+                            </span>
+                            <span className="text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.2 rounded">
+                              Perforated
                             </span>
                           </div>
                         )}
                       </div>
 
-                      {/* Mobile action buttons */}
-                      <div className="flex items-center justify-end gap-2 pt-0.5">
+                      {/* Mobile action buttons (40px touch targets) */}
+                      <div className="grid grid-cols-3 gap-1.5 pt-1">
                         <Button
                           size="sm"
-                          variant="ghost"
-                          className="h-8 text-xs text-muted-foreground hover:text-foreground"
+                          variant="outline"
+                          className="h-10 text-xs font-medium gap-1 text-muted-foreground hover:text-foreground"
                           onClick={() => setViewingProduct(p)}
                         >
-                          <Eye className="h-3.5 w-3.5 mr-1" /> View
+                          <Eye className="h-3.5 w-3.5" />
+                          <span>View</span>
                         </Button>
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-8 text-xs"
+                          className="h-10 text-xs font-medium gap-1"
                           onClick={() => setEditingProduct(p)}
                         >
                           {hasMovements ? (
                             <>
-                              <Lock className="h-3.5 w-3.5 mr-1 text-amber-600" />
-                              Locked
+                              <Lock className="h-3.5 w-3.5 text-amber-600" />
+                              <span>Locked</span>
                             </>
                           ) : (
                             <>
-                              <Edit2 className="h-3.5 w-3.5 mr-1" /> Edit
+                              <Edit2 className="h-3.5 w-3.5" />
+                              <span>Edit</span>
                             </>
                           )}
                         </Button>
                         <Button
                           size="sm"
-                          variant="ghost"
-                          className={`h-8 text-xs ${
+                          variant="outline"
+                          className={cn(
+                            "h-10 text-xs font-medium gap-1",
                             p.status === "active"
-                              ? "text-muted-foreground hover:text-destructive"
-                              : "text-emerald-700 hover:bg-emerald-50"
-                          }`}
+                              ? "text-muted-foreground hover:text-destructive hover:border-destructive/30"
+                              : "text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200",
+                          )}
                           onClick={() => void handleToggleArchive(p)}
                         >
                           {p.status === "active" ? (
                             <>
-                              <Archive className="h-3.5 w-3.5 mr-1" /> Archive
+                              <Archive className="h-3.5 w-3.5" />
+                              <span>Archive</span>
                             </>
                           ) : (
                             <>
-                              <ArchiveRestore className="h-3.5 w-3.5 mr-1 text-emerald-600" />
-                              Activate
+                              <ArchiveRestore className="h-3.5 w-3.5 text-emerald-600" />
+                              <span>Activate</span>
                             </>
                           )}
                         </Button>
@@ -512,24 +673,22 @@ export default function ProductsPage() {
               {/* Desktop Data Table (hidden on mobile, displayed on md+) */}
               <div className="hidden md:block overflow-x-auto min-w-0 w-full">
                 <table className="w-full text-left text-sm">
-                  <thead className="border-b text-muted-foreground">
+                  <thead className="border-b bg-surface/60 text-muted-foreground text-xs uppercase tracking-wider font-semibold">
                     <tr>
-                      <th className="py-2.5 pr-4 font-medium">Code</th>
-                      <th className="py-2.5 pr-4 font-medium">Name</th>
-                      <th className="py-2.5 pr-4 font-medium">Category</th>
-                      <th className="py-2.5 pr-4 font-medium">Gauge</th>
-                      <th className="py-2.5 pr-4 font-medium">Base Unit</th>
-                      <th className="py-2.5 pr-4 font-medium">Tracking</th>
-                      <th className="py-2.5 pr-4 font-medium">Specifications</th>
-                      <th className="py-2.5 pr-4 font-medium text-right">
-                        Stock
-                      </th>
-                      <th className="py-2.5 pr-4 font-medium">Status</th>
-                      <th className="py-2.5 font-medium text-right">Actions</th>
+                      <th className="py-3 px-4 font-semibold">Code</th>
+                      <th className="py-3 px-4 font-semibold">Name</th>
+                      <th className="py-3 px-4 font-semibold">Category</th>
+                      <th className="py-3 px-4 font-semibold">Gauge</th>
+                      <th className="py-3 px-4 font-semibold">Base Unit</th>
+                      <th className="py-3 px-4 font-semibold">Tracking</th>
+                      <th className="py-3 px-4 font-semibold">Specifications</th>
+                      <th className="py-3 px-4 font-semibold text-right">Stock</th>
+                      <th className="py-3 px-4 font-semibold">Status</th>
+                      <th className="py-3 px-4 font-semibold text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {filteredProducts.map((p) => {
+                    {paginatedProducts.map((p) => {
                       const hasMovements = (p.stock_movements?.length ?? 0) > 0;
                       const stockQty = getProductStockBalance(p);
 
@@ -538,10 +697,10 @@ export default function ProductsPage() {
                           key={p.id}
                           className="hover:bg-muted/40 transition-colors"
                         >
-                          <td className="py-3 pr-4 font-mono font-bold text-brand-blue">
+                          <td className="py-3 px-4 font-mono font-bold text-brand-blue">
                             {p.code}
                           </td>
-                          <td className="py-3 pr-4">
+                          <td className="py-3 px-4">
                             <button
                               type="button"
                               className="font-medium text-left hover:underline text-foreground"
@@ -550,10 +709,10 @@ export default function ProductsPage() {
                               {p.name}
                             </button>
                           </td>
-                          <td className="py-3 pr-4 text-muted-foreground">
+                          <td className="py-3 px-4 text-muted-foreground">
                             {p.category?.name ?? "—"}
                           </td>
-                          <td className="py-3 pr-4 font-mono text-xs">
+                          <td className="py-3 px-4 font-mono text-xs">
                             {p.gauge ? (
                               <span
                                 className="inline-flex items-center gap-1 rounded bg-slate-100 dark:bg-slate-800 px-2 py-0.5 font-semibold text-foreground border border-border"
@@ -569,10 +728,10 @@ export default function ProductsPage() {
                               <span className="text-muted-foreground">—</span>
                             )}
                           </td>
-                          <td className="py-3 pr-4 font-mono text-xs">
+                          <td className="py-3 px-4 font-mono text-xs">
                             {p.base_uom?.code}
                           </td>
-                          <td className="py-3 pr-4">
+                          <td className="py-3 px-4">
                             <span
                               className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
                                 p.tracking_mode === "roll"
@@ -585,7 +744,7 @@ export default function ProductsPage() {
                                 : "Aggregate"}
                             </span>
                           </td>
-                          <td className="py-3 pr-4 text-xs">
+                          <td className="py-3 px-4 text-xs">
                             <div className="space-y-1">
                               {p.perforation && (
                                 <span className="inline-flex items-center gap-1 text-primary font-medium bg-primary/10 rounded px-1.5 py-0.5">
@@ -597,7 +756,7 @@ export default function ProductsPage() {
                               )}
                               {p.paano_value != null && p.paano_unit && (
                                 <span className="inline-flex items-center gap-1 text-foreground font-medium bg-muted rounded px-1.5 py-0.5">
-                                  Paano: {p.paano_value} {p.paano_unit}
+                                  Height (Paano): {formatPaano(p.paano_value, p.paano_unit, p.paano_in_feet)}
                                 </span>
                               )}
                               {!p.perforation && (p.paano_value == null || !p.paano_unit) && (
@@ -605,7 +764,7 @@ export default function ProductsPage() {
                               )}
                             </div>
                           </td>
-                          <td className="py-3 pr-4 text-right tabular-nums font-mono">
+                          <td className="py-3 px-4 text-right tabular-nums font-mono">
                             <div className="font-bold text-foreground">
                               {formatQty(stockQty)} {p.base_uom?.code}
                             </div>
@@ -615,7 +774,7 @@ export default function ProductsPage() {
                               </div>
                             )}
                           </td>
-                          <td className="py-3 pr-4">
+                          <td className="py-3 px-4">
                             <span
                               className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                                 p.status === "active"
@@ -626,7 +785,7 @@ export default function ProductsPage() {
                               {p.status === "active" ? "Active" : "Archived"}
                             </span>
                           </td>
-                          <td className="py-3 text-right">
+                          <td className="py-3 px-4 text-right">
                             <div className="flex items-center justify-end gap-1">
                               <Button
                                 size="icon"
@@ -680,6 +839,25 @@ export default function ProductsPage() {
                 </table>
               </div>
             </>
+          )}
+
+          {/* Responsive Pagination Bar */}
+          {filteredProducts.length > 0 && !loading && (
+            <div className="p-3.5 sm:p-6 pt-0">
+              <PaginationBar
+                currentPage={safeCurrentPage}
+                totalPages={totalPages}
+                pageSize={pageSize}
+                totalItems={filteredProducts.length}
+                itemName="products"
+                scrollTargetId="products-top"
+                onPageChange={setCurrentPage}
+                onPageSizeChange={(newSize) => {
+                  setPageSize(newSize);
+                  setCurrentPage(1);
+                }}
+              />
+            </div>
           )}
         </CardContent>
       </Card>
@@ -1102,9 +1280,9 @@ function ProductFormModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="w-full max-w-2xl bg-card border rounded-lg shadow-xl overflow-hidden my-auto max-h-[92vh] flex flex-col">
-        <div className="flex items-center justify-between border-b px-6 py-4 shrink-0">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-3 sm:p-4">
+      <div className="w-full max-w-2xl bg-card border rounded-xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+        <div className="flex items-center justify-between border-b px-4 sm:px-6 py-3.5 bg-surface/30 shrink-0">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-bold">
               {isEditing ? "Edit Product" : "New Product"}
@@ -1118,20 +1296,21 @@ function ProductFormModal({
           <button
             type="button"
             onClick={onClose}
-            className="text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-muted transition-colors"
             aria-label="Close modal"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <form ref={formRef} onSubmit={handleSubmit} className="p-6 grid gap-5 overflow-y-auto flex-1">
-          {error && (
-            <div role="alert" className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
+        <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div className="p-4 sm:p-6 grid gap-4 sm:gap-5 overflow-y-auto flex-1 min-h-0">
+            {error && (
+              <div role="alert" className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
 
           {/* Primary Product Type: Perforated Sheet Checkbox (First Control) */}
           <div className="rounded-lg border bg-muted/40 p-3.5 flex items-center justify-between">
@@ -1177,9 +1356,9 @@ function ProductFormModal({
           )}
 
           {/* Section: Basic Info */}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-1.5">
-              <div className="flex items-center justify-between">
+          <div className="grid gap-4 sm:grid-cols-2 items-start">
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between min-h-6">
                 <Label htmlFor="prod-code">Product Code</Label>
                 <span
                   className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
@@ -1197,7 +1376,7 @@ function ProductFormModal({
                   value={product.code}
                   disabled
                   readOnly
-                  className="font-mono font-bold text-brand-blue bg-muted/40 cursor-not-allowed"
+                  className="font-mono font-bold text-brand-blue bg-muted/40 cursor-not-allowed h-9"
                 />
               ) : (
                 <div className="flex h-9 w-full items-center justify-between rounded-md border border-dashed border-input bg-muted/30 px-3 py-1 text-sm font-mono text-muted-foreground shadow-2xs">
@@ -1213,8 +1392,10 @@ function ProductFormModal({
                   : "Unique 4-digit code (e.g. SE-0001) will be generated automatically by the database."}
               </p>
             </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="prod-category">Category</Label>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between min-h-6">
+                <Label htmlFor="prod-category">Category</Label>
+              </div>
               <select
                 id="prod-category"
                 value={categoryId}
@@ -1228,6 +1409,9 @@ function ProductFormModal({
                   </option>
                 ))}
               </select>
+              <p className="text-[11px] text-muted-foreground">
+                Classification for catalog and filtering.
+              </p>
             </div>
           </div>
 
@@ -1254,9 +1438,11 @@ function ProductFormModal({
           </div>
 
           {/* Section: Units, Tracking & Gauge */}
-          <div className="border-t pt-4 grid gap-4 grid-cols-1 sm:grid-cols-2">
-            <div className="grid gap-1.5">
-              <Label htmlFor="base-uom">Base Stock Unit</Label>
+          <div className="border-t pt-4 grid gap-4 grid-cols-1 sm:grid-cols-2 items-start">
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between min-h-6">
+                <Label htmlFor="base-uom">Base Stock Unit</Label>
+              </div>
               <select
                 id="base-uom"
                 value={baseUomId}
@@ -1275,8 +1461,10 @@ function ProductFormModal({
               </p>
             </div>
 
-            <div className="grid gap-1.5">
-              <Label htmlFor="tracking-mode">Tracking Mode</Label>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between min-h-6">
+                <Label htmlFor="tracking-mode">Tracking Mode</Label>
+              </div>
               <select
                 id="tracking-mode"
                 value={trackingMode}
@@ -1294,8 +1482,8 @@ function ProductFormModal({
               </p>
             </div>
 
-            <div className="grid gap-1.5">
-              <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between min-h-6">
                 <Label htmlFor="prod-gauge">Gauge</Label>
                 {gauge && (
                   <button
@@ -1336,8 +1524,10 @@ function ProductFormModal({
               </p>
             </div>
 
-            <div className="grid gap-1.5">
-              <Label htmlFor="low-stock">Low Stock Threshold</Label>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between min-h-6">
+                <Label htmlFor="low-stock">Low Stock Threshold</Label>
+              </div>
               <Input
                 id="low-stock"
                 type="number"
@@ -1346,6 +1536,7 @@ function ProductFormModal({
                 value={lowStockThreshold}
                 onChange={(e) => setLowStockThreshold(e.target.value)}
                 disabled={isPending}
+                className="h-9"
               />
               <p className="text-[11px] text-muted-foreground">
                 Threshold in product base unit.
@@ -1564,12 +1755,14 @@ function ProductFormModal({
               </p>
             </div>
 
-            <div className="rounded-md border p-4 bg-muted/20 grid gap-4">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="grid gap-1">
-                  <Label htmlFor="hole-diam" className="text-xs">
-                    Hole Diameter (d in mm) {isPerforated && <span className="text-destructive">*</span>}
-                  </Label>
+            <div className="rounded-md border p-4 bg-muted/20">
+              <div className="grid gap-3 sm:grid-cols-2 items-start">
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between min-h-6">
+                    <Label htmlFor="hole-diam" className="text-xs font-medium text-foreground">
+                      Hole Diameter (d in mm) {isPerforated && <span className="text-destructive font-bold">*</span>}
+                    </Label>
+                  </div>
                   <Input
                     id="hole-diam"
                     type="number"
@@ -1578,17 +1771,22 @@ function ProductFormModal({
                     value={holeDiameter}
                     onChange={(e) => setHoleDiameter(e.target.value)}
                     disabled={isPending || hasMovements}
-                    className="h-8 text-xs"
+                    className="h-9 text-xs"
                   />
+                  <p className="text-[10px] text-muted-foreground">
+                    Required diameter of each perforated hole
+                  </p>
                 </div>
 
-                <div className="grid gap-1">
-                  <Label
-                    htmlFor="hole-pitch"
-                    className="text-xs font-semibold text-brand-blue"
-                  >
-                    Pitch (p in mm) <span className="text-[11px] font-normal text-muted-foreground">(Optional)</span>
-                  </Label>
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between min-h-6">
+                    <Label
+                      htmlFor="hole-pitch"
+                      className="text-xs font-medium text-foreground"
+                    >
+                      Pitch (p in mm) <span className="text-[11px] font-normal text-muted-foreground">(Optional)</span>
+                    </Label>
+                  </div>
                   <Input
                     id="hole-pitch"
                     type="number"
@@ -1597,7 +1795,7 @@ function ProductFormModal({
                     value={pitch}
                     onChange={(e) => setPitch(e.target.value)}
                     disabled={isPending || hasMovements}
-                    className="h-8 text-xs font-medium"
+                    className="h-9 text-xs"
                   />
                   <p className="text-[10px] text-muted-foreground">
                     Centre-to-centre distance (p &gt; d if provided)
@@ -1607,16 +1805,19 @@ function ProductFormModal({
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-2 border-t pt-4">
+          </div>
+
+          <div className="shrink-0 border-t px-4 sm:px-6 py-3 bg-surface/40 flex items-center justify-end gap-2.5">
             <Button
               type="button"
               variant="outline"
               onClick={onClose}
               disabled={isPending}
+              className="min-h-[40px] px-4"
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isPending}>
+            <Button type="submit" disabled={isPending} className="min-h-[40px] px-5">
               {isPending
                 ? "Saving…"
                 : isEditing
@@ -1644,9 +1845,9 @@ function ProductDetailsModal({
   const hasMovements = (product.stock_movements?.length ?? 0) > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-      <div className="w-full max-w-lg bg-card border rounded-lg shadow-xl overflow-hidden">
-        <div className="flex items-center justify-between border-b px-6 py-4 bg-muted/10">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-3 sm:p-4">
+      <div className="w-full max-w-lg bg-card border rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between border-b px-5 sm:px-6 py-3.5 bg-muted/10 shrink-0">
           <div>
             <span className="font-mono text-xs font-bold text-brand-blue">
               {product.code}
@@ -1658,14 +1859,14 @@ function ProductDetailsModal({
           <button
             type="button"
             onClick={onClose}
-            className="text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-muted transition-colors"
             aria-label="Close details modal"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="p-6 grid gap-4 text-sm">
+        <div className="p-5 sm:p-6 grid gap-4 text-sm overflow-y-auto flex-1 min-h-0">
           <div className="grid grid-cols-2 gap-4 pb-3 border-b">
             <div>
               <p className="text-xs text-muted-foreground">Category</p>
@@ -1852,8 +2053,8 @@ function ProductDetailsModal({
           </div>
         </div>
 
-        <div className="border-t px-6 py-3 flex justify-end bg-muted/10">
-          <Button variant="outline" size="sm" onClick={onClose}>
+        <div className="shrink-0 border-t px-5 sm:px-6 py-3 flex justify-end bg-muted/10">
+          <Button variant="outline" size="sm" onClick={onClose} className="min-h-[38px] px-4">
             Close
           </Button>
         </div>
